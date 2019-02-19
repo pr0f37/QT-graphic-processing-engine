@@ -1,0 +1,21 @@
+#include "siftdescriptor.h"
+
+SiftDescriptor::SiftDescriptor()
+{
+    _class = 0;
+}
+
+SiftDescriptor::SiftDescriptor(const QString &name, double *descriptor, int cls , double x , double y , double a , double b , double c , double scl , double ori )
+{
+    _class = cls;
+    _name = name;
+    _descriptor = descriptor;
+    _x = x;
+    _y = y;
+    _a = a;
+    _b = b;
+    _c = c;
+    _scl = scl;
+    _ori = ori;
+
+}

@@ -1,0 +1,23 @@
+#ifndef SIFTANALYSER_H
+#define SIFTANALYSER_H
+#include "analyser.h"
+class SiftAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+    SiftAnalyser(const QString &, const QString &);
+    void updateConfigFile();
+    void analyseImage(const QImage&, const QString&);
+    void analyseImage(QImage *);
+    void analyseImage2(QImage *);
+    void convolveFilter(QImage *, int *w, int wX, int wY);
+    void bw(QImage *);
+    void imageSum(QImage *, QImage *);
+    void imageDiff(QImage *, QImage *);
+    void gradient(QImage *, int);
+    void mygradient(QImage *, int);
+    void threesholdFilter(QImage *, int);
+
+};
+
+#endif // SIFTANALYSER_H

@@ -1,0 +1,69 @@
+#ifndef IMAGEANALYSER_H
+#define IMAGEANALYSER_H
+
+#include "analyser.h"
+
+#define COMPONENT_ARRAY_SIZE 511
+
+
+class ImageAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+
+    ImageAnalyser(const QString&, const QString&);
+    void initTree();
+    void constructTree(const int = 0);
+    void constructTree(QFile&);
+    void startTreeConstruct(int);
+    void treeLevelConstruct(int, const QString&);
+    int getBstMedian(const QString&);
+    int getImageMedian(quint64*);
+    void analyseImage(const QImage&, const QString&, const int);
+    void updateDatabase(const QString&);
+    void updateConfigFile();
+    void inline fileCorrupted(QFile&);
+    void getKey(int, QString&);
+
+    QHash<QString, int> getCodeTree();
+
+    void setCodeTree(QHash<QString, int>&);
+
+signals:
+    void componentRead(const QString);
+    void sendBstCode(const QString);
+    void sendDepthLevel(const QString);
+    void sendQuarterValue(const QString);
+public slots:
+    void setComponent(const QString);
+    void receiveColor(const QColor);
+    void receiveFileName(const QString);
+    void setDepth(const QString);
+    void updateCurrentColor(const QString);
+    void goToLeftChild();
+    void goToRightChild();
+    void goToAncestor();
+    void getQuarter();
+    void setQuarter(const int);
+    void setShift(const int);
+private:
+    void modCodeTree(QHash<QString, int> *, int);
+    void chooseCodeTree(int);
+    QHash<QString, int> *_codeTree;
+    QHash<QString, int> *_codeTreeZero;
+    QHash<QString, int> *_codeTreeFirst;
+    QHash<QString, int> *_codeTreeSecond;
+    QHash<QString, int> *_codeTreeThird;
+    QHash<QString, int> *_codeTreeFourth;
+    QHash<QString, int> _imageMedian;
+    QHash<QString, QString> _imageCode;
+    QHash<QString, quint64*> _imageComponent;
+    quint64 _componentArray[511]; // (-255,255)
+    bool _component;
+    int _tree_depth;
+    QString _currentColorKey;
+    int _quarter;
+    int _shift;
+};
+
+#endif // IMAGEANALYSER_H

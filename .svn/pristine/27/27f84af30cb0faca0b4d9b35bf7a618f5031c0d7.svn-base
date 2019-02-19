@@ -1,0 +1,5 @@
+#include "lssanalyser.h"
+
+LssAnalyser::LssAnalyser(const QString &fileName, const QString &imageTableName):Analyser(fileName, imageTableName)
+{
+}

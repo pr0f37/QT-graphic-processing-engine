@@ -1,0 +1,43 @@
+#include "lssimage.h"
+
+
+LssImage::LssImage()
+{
+
+}
+
+LssImage::LssImage(int cls, QString * name, int * bthHistogram, QLinkedList<LssDescriptor*> * descriptors)
+{
+    this->_class = cls;
+    this->_name = name;
+    this->_bthHistogram = bthHistogram;
+    this->_descriptors = descriptors;
+}
+
+/* we have to remember that last value of iterator is alwayhs 0 and therefore should be omited*/
+LssImage::LssImage(QString * name, vector<float> * descriptors)
+{
+    this->_name = name;
+    this->_descriptors = new QLinkedList<LssDescriptor*>();
+    int counter = 1;
+    QLinkedList<float> * desc = new QLinkedList<float>();
+
+    for(vector<float>::iterator it = descriptors->begin(); it != descriptors->end(); ++it, ++counter)
+    {
+        desc->push_back(*it);
+        if (counter % LssDescriptor::_descSize == 0)
+        {
+            this->_descriptors->push_back(new LssDescriptor(desc));
+            desc = new QLinkedList<float>();
+        }
+    }
+}
+
+LssImage::LssImage(LssImage * image)
+{
+    this->_class = image->_class;
+    this->_name = image->_name;
+    this->_bthHistogram = image->_bthHistogram;
+    this->_descriptors = image->_descriptors;
+}
+

@@ -1,0 +1,164 @@
+#ifndef MAINWINDOW_H
+#define MAINWINDOW_H
+
+#include <QMainWindow>
+#include <QColorDialog>
+#include "view.h"
+#include "analyser.h"
+#include "imageanalyser.h"
+#include "bthanalyser.h"
+#include "bthareaanalyser.h"
+#include "siftanalyser.h"
+#include "lssanalyser.h"
+#include "logger.h"
+
+namespace Ui {
+    class MainWindow;
+}
+
+class MainWindow : public QMainWindow
+{
+    Q_OBJECT
+
+public:
+    explicit MainWindow(QWidget *parent = 0);
+    ~MainWindow();
+signals:
+    void sendBstCode(const QString);
+    void sendColor(const QColor);
+    void sendFileName(const QString);
+    void sendDepthLevel(const QString);
+    void sendFileNameBTH(const QString);
+    void sendThreesholdValue(const int);
+    void sendFileNameBTHA(const QString);
+    void sendThreesholdValueA(const int);
+    void sendAreaPosX(const int);
+    void sendAreaPosY(const int);
+    void sendAreaH(const int);
+    void sendAreaW(const int);
+    void sendQuarter(const int);
+    void sendShift(const int);
+    void bthInitialize();
+    void bthLoad();
+public slots:
+    void setComponentRadio(const QString);
+    void reConstructTree();
+    void readBstCode();
+    void readBstCode(const QString);
+    void showColorWindow();
+    void getFileName();
+    void getFileNameBTH(const QString);
+    void changeValue(const int);
+    void changeShift(const int);
+    void bthEnableAndInitialize();
+    void bthEnableAndLoad();
+    void bthSearchButtonClicked();
+    void bthRepeatButtonClicked();
+    void siftBorderExtractionButtonClicked();
+    void siftBorderExtractionButton2Clicked();
+    void siftDrawImagesButtonClicked();
+    void siftFindClosestImagesButtonClicked();
+
+private:
+    void createStatusBar();
+    void createTips();
+    void createConnections();
+    void createAnalysers();
+    void enableBSTButtons(const bool&);
+    void enableBTHButtons(const bool&);
+    bool checkShift(const int);
+    bool checkQuarter(const int);
+    void sendUserParameters(const bool &);
+    Ui::MainWindow *ui;
+    View *myGraphicView;
+    ImageAnalyser *analyser;
+    BthAnalyser *bthanalyser;
+    BthAreaAnalyser *bthareaanalyser;
+    QString _BTHFileName;
+    QColorDialog *colorWindow;
+    QWidget *BNPage;
+    QWidget *BTHPage;
+
+    QPushButton *BTHInitializeButton;
+    QPushButton *BTHLoadButton;
+    QPushButton *BTHSearchButton;
+    QGridLayout *BTHLayout;
+    QGridLayout *BNMenuLayout;
+    QTabWidget *tabWidget;
+    QLabel *codeLabel;
+    QLineEdit *codeEdit;
+    QPushButton *codeButton;
+    QPushButton *colorButton;
+    QPushButton *exampleButton;
+    QLabel *componentLabel;
+    QRadioButton *rgComponentButton;
+    QRadioButton *byComponentButton;
+    QPushButton *reBstTreeButton;
+    QHBoxLayout *radioLayout;
+    QHBoxLayout *treeButtonsLayout;
+    QPushButton *upButton;
+    QPushButton *rightButton;
+    QPushButton *leftButton;
+    QLabel *treeDepthLabel;
+    QLineEdit *treeDepthEdit;
+    QLabel *imageQuarterLabel;
+    QLineEdit *imageQuarterEdit;
+    QLabel *shiftLabel;
+    QLineEdit *shiftEdit;
+    QSlider *shiftSlider;
+    QSlider *BTHSlider;
+    QLabel *BTHSliderLabel;
+    QLineEdit *BTHSliderValue;
+    QPushButton *BTHAreaButton;
+    QPushButton *BTHRepeatButton;
+    QCheckBox *BTHAreaIndicator;
+    QLineEdit *BTHAreaWidthEdit;
+    QLineEdit *BTHAreaHeightEdit;
+    QLineEdit *BTHAreaPosXEdit;
+    QLineEdit *BTHAreaPosYEdit;
+    QLabel *BTHAreaWidthLabel;
+    QLabel *BTHAreaHeightLabel;
+    QLabel *BTHAreaPosXLabel;
+    QLabel *BTHAreaPosYLabel;
+    QGridLayout *BTHAreaLayout;
+    // SIFT
+    QWidget *SIFTPage;
+    QGridLayout *SIFTLayout;
+    QPushButton *SIFTDictRandButton;
+    QPushButton *SIFTKmeansButton;
+    QPushButton *SIFTDrawImagesButton;
+    QPushButton *SIFTFindClosestImagesButton;
+    SiftAnalyser *siftAnalyser;
+    QCheckBox *SIFTNewDictionaryCheckBox;
+    QLineEdit *SIFTThresholdValueEdit;
+    QLabel *SIFTThresholdLabel;
+    QLineEdit *SIFTBlockNumWEdit;
+    QLabel *SIFTBlockNumWLabel;
+    QLineEdit *SIFTBlockNumHEdit;
+    QLabel *SIFTBlockNumHLabel;
+    QLineEdit *SIFTImageNumEdit;
+    QLabel *SIFTImageNumLabel;
+    QLineEdit *SIFTMinValueEdit;
+    QLineEdit *SIFTMaxValueEdit;
+    QLabel *SIFTVectorNumLabel;
+    QLineEdit *SIFTVectorNumEdit;
+    QHBoxLayout * SIFTBlocksLayout;
+    QVBoxLayout * SIFTBlocksWLayout;
+    QVBoxLayout * SIFTBlocksHLayout;
+    QHBoxLayout * SIFTMinMaxLayout;
+    QVBoxLayout * SIFTThresholdLayout;
+    QVBoxLayout * SIFTNewDictLayout;
+    QVBoxLayout * SIFTImageNumLayout;
+    QHBoxLayout * SIFTDrawImagesLayout;
+    QHBoxLayout * SIFTThresholdAndNewDictLayout;
+
+    QLabel * SIFTDistanceLabel;
+    QLineEdit *SIFTDistanceEdit;
+    QLabel * SIFTWordsNumberLabel;
+    QLineEdit * SIFTWordsNumberEdit;
+    // LSS
+    LssAnalyser * lssAnalyser;
+
+};
+
+#endif // MAINWINDOW_H

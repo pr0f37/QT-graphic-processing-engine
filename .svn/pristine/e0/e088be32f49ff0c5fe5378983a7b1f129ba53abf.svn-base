@@ -1,0 +1,22 @@
+#ifndef SIFTIMAGE_H
+#define SIFTIMAGE_H
+#include <QLinkedList>
+#include <QString>
+#include "siftdescriptor.h"
+extern "C" {
+
+    #include "imgfeatures.h"
+
+}
+
+class SiftImage
+{
+public:
+    SiftImage(const QString &, struct feature *, int n);
+    QLinkedList<SiftDescriptor*> _featuresList;
+    QString _name;
+    int * _siftBth;
+
+};
+
+#endif // SIFTIMAGE_H

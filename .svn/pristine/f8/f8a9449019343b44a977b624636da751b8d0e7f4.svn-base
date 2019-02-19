@@ -1,0 +1,137 @@
+#ifndef LSSANALYSER_H
+#define LSSANALYSER_H
+#include "analyser.h"
+#include "cxcore.h"
+#include "cv.h"
+#include "cvaux.h"
+#include "highgui.h"
+#include "ml.h"
+//using namespace cv;
+class LssAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+    LssAnalyser(const QString &, const QString &);
+    
+
+
+    class LSS
+    {
+    public:
+        LSS(){}
+
+        LSS( cv::Point p, cv::Mat im )
+        {
+            this->compute ( p, im );
+        }
+
+        cv::Mat_<float> operator()(void)
+        {
+            return this->d;
+        }
+
+        cv::Mat_<float> compute( const cv::Point& p, const cv::Mat& input )
+        {
+
+            if( p.x-odim/2 < 0 || p.y-odim/2 < 0 || p.x+odim/2 >= input.cols || p.y+odim/2 >= input.rows)
+                throw cv::Exception( 1 , "point too close to border" , "compute_descriptor" , "lss.h" , 22 );
+
+            cv::Mat_<cv::Vec3b> image(input);
+            cv::Mat_<cv::Vec3b> ipatch = image( cv::Range(p.y-idim/2,p.y+idim/2), cv::Range(p.x-idim/2, p.x+idim/2)  );
+            cv::Mat_<cv::Vec3b> opatch = image( cv::Range(p.y-odim/2,p.y+odim/2), cv::Range(p.x-odim/2, p.x+odim/2)  );
+
+            cv::Mat_<cv::Vec3b> w;
+            cv::Mat_<float> distance_surface( odim/idim, odim/idim );
+            cv::Mat_<float> polar;
+
+            float epsilon, eta, corr, current;
+            float* angle = new float[angle_steps];
+            float* radii = new float[radii_steps];
+
+            for (int i = 0 ; i < angle_steps ; ++i)
+                angle[i] = i * 2. * CV_PI/angle_steps;
+            for(int i  = 0 ; i < radii_steps ; ++i)
+                radii[i] = i*(odim/2)/radii_steps;
+
+            for(int i = 0, ii=0 ; i < odim ; i += idim, ++ii)
+            {
+                for(int j = 0, jj = 0 ; j < odim ; j += idim, ++jj)
+                {
+                    w = opatch(cv::Range(i,i+idim),cv::Range(j,j+idim));
+                    distance_surface(ii,jj) = ssd(ipatch,w);
+                }
+            }
+
+            //cv::normalize
+            normalize( distance_surface, distance_surface, 0., 1., cv::NORM_MINMAX );
+
+            //log-polar
+            int n, m;
+            polar = cv::Mat_<float>::zeros( radii_steps, angle_steps );
+            for(int i = 0 ; i < distance_surface.rows ; ++i)
+            {
+                for(int j = 0 ; j < distance_surface.cols ; ++j)
+                {
+                    epsilon = sqrt( double(i*i+j*j) );
+                    if(i)
+                        eta = atan( j/double(i) );
+                    else
+                        eta = CV_PI/2.;
+
+                    n = 0; m = 0;
+                    while(radii[n++]<epsilon && n < radii_steps){}
+                    while(angle[m++]<eta && m < angle_steps){}
+                    --n;--m;
+                    corr = exp(-distance_surface(i,j)/(varnoise*.1));
+                    current = polar(n,m);
+
+                    polar(n,m) += corr;
+                }
+            }
+            //cv::normalize polar
+            normalize( polar, polar, 0., 1., cv::NORM_MINMAX );
+            this->d = polar;
+            return polar;
+        }
+
+        void visualize() const
+        {
+            visualize( this->d );
+        }
+
+        void visualize( const cv::Mat_<float>& polar ) const
+        {
+            int M = 20;
+            cv::Mat_<float> canvas;
+
+            resize( polar, canvas, cvSize( polar.rows*M, polar.cols*M ), 0, 0, cv::INTER_AREA );
+            imshow( "LSS Descriptor" , canvas.t() );
+
+            cv::waitKey( );
+        }
+
+        static const int idim = 5;
+        static const int odim = 80;
+        static const int radii_steps = 40;
+        static const int angle_steps = 10;
+        static const int varnoise = 1;
+
+    protected:
+        cv::Mat_<float> d;//descriptor
+        float ssd( const cv::Mat_<cv::Vec3b>& a, const cv::Mat_<cv::Vec3b>& b )
+        {
+            float c = 0;
+            for(int i = 0 ; i<a.rows ; ++i)
+                for(int j = 0 ; j<a.cols ; ++j)
+                    c += ( a(i,j)-b(i,j) ).dot( a(i,j)-b(i,j) );
+            return c;
+        }
+
+    };
+signals:
+    
+public slots:
+    
+};
+
+#endif // LSSANALYSER_H

@@ -1,0 +1,555 @@
+#include "imageanalyser.h"
+
+ImageAnalyser::ImageAnalyser(const QString &fileName, const QString &imageTableName)
+    :Analyser(fileName, imageTableName)
+{
+    for (int i = 0; i < COMPONENT_ARRAY_SIZE; )
+        _componentArray[i++] = 0;
+
+    _component = true;
+    _currentColorKey = "0";
+    _codeTree = new QHash<QString, int>();
+    _quarter = 0;
+    _shift = 0;
+}
+
+void ImageAnalyser::initTree()
+{
+    QFile * file = new QFile(_fileName);
+
+    if(!file->open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Drzewo wyszukiwania jest konstruowane.\n"
+                       "Prosze czekac."));
+        msgBox.exec();
+        constructTree();
+    }
+    else
+    {
+        constructTree(*file);
+        file->close();
+    }
+    _tree_depth = 4;
+    QString treeDepth = (QString)_tree_depth;
+    emit sendDepthLevel(treeDepth);
+}
+
+void ImageAnalyser::constructTree(const int quarter)
+{
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel(this);
+    _codeTree->clear();
+    imageTable->setTable(_imageTableName);
+    imageTable->select();
+    int imageCount = imageTable->rowCount();
+    QString bstIndicator = "bst_key";
+    switch(quarter)
+    {
+    case 1:
+        bstIndicator = "bk_first";
+        break;
+    case 2:
+        bstIndicator = "bk_second";
+        break;
+    case 3:
+        bstIndicator = "bk_third";
+        break;
+    case 4:
+        bstIndicator = "bk_fourth";
+        break;
+    }
+    for (int i = 0; i < imageCount; i++) {
+        QSqlRecord record = imageTable->record(i); // reads one record from image table
+        QString file = record.value("file").toString();
+        QImage *image = new QImage(file); // opens image read from database
+        analyseImage(*image, file, quarter); // analyses the image and stores information in colorcomponentMap
+        delete image;
+
+        QSqlQuery query; // set bst_code in the database to "0"
+        QString queryContent = "update images set " + bstIndicator + "='0' ";
+        queryContent += "where file='" + file + "'";
+        query.exec(queryContent);
+    }
+    Logger * logger = new Logger("component.txt");
+    for (int i = 0; i < 500; i++)
+        logger->logPrimitive(QString::number(_componentArray[i]) + ", " );
+    startTreeConstruct(_tree_depth); // initialize tree construction
+
+    updateDatabase(bstIndicator); // updates database with bst keys
+    updateConfigFile(); // updates configuration file with latest BST tree
+    _component?(emit componentRead("BY")):(emit componentRead("RG")); // set proper component radio button checked
+}
+
+void ImageAnalyser::constructTree(QFile &file)
+{
+    _codeTree->clear();
+    QTextStream in(&file);
+    const QString cmp = in.readLine();
+    if (cmp.isNull() || (cmp != "RG" && cmp != "BY"))
+        fileCorrupted(file);
+    else
+    {
+        if (cmp == "RG")
+        {
+            _component = false;
+            emit componentRead("RG");
+        }
+        else if (cmp == "BY")
+        {
+            _component = true;
+            emit componentRead("BY");
+        }
+        while(!in.atEnd())
+        {
+            const QString bstKey = in.readLine();
+            bool ok;
+            bstKey.toInt(&ok,2);
+            if (!ok)
+                fileCorrupted(file);
+            if (!in.atEnd())
+            {
+                const int median = (in.readLine()).toInt();
+                if (median >= 0 && median < 511)
+                    _codeTree->insert(bstKey, median);
+                else
+                    fileCorrupted(file);
+
+            }
+            else
+                break;
+        }
+
+
+    }
+}
+
+void ImageAnalyser::fileCorrupted(QFile &file)
+{
+    QMessageBox msgBox;
+    msgBox.setText(tr("Plik konfiguracyjny uszkodzony, drzewo wyszukiwania musi zostac zrekonstruowane.\n"
+                      "Kliknij OK"));
+    msgBox.exec();
+    file.close();
+    constructTree();
+}
+
+void ImageAnalyser::setComponent(const QString cmp)
+{
+    if (cmp == "RG")
+        _component = false;
+    else if (cmp == "BY")
+        _component = true;
+    constructTree();
+
+    Logger *logger = new Logger("setComponent.txt");
+    _codeTreeZero = _codeTree;
+    _codeTree = new QHash<QString, int>();
+    logger->log(QString::number(_codeTreeZero->capacity()));
+    constructTree(1);
+    _codeTreeFirst = _codeTree;
+    _codeTree = new QHash<QString, int>();
+    logger->log(QString::number(_codeTreeFirst->capacity()));
+    constructTree(2);
+    _codeTreeSecond = _codeTree;
+    _codeTree = new QHash<QString, int>();
+    logger->log(QString::number(_codeTreeSecond->capacity()));
+    constructTree(3);
+    _codeTreeThird = _codeTree;
+    logger->log(QString::number(_codeTreeThird->capacity()));
+    _codeTree = new QHash<QString, int>();
+    constructTree(4);
+    _codeTreeFourth = _codeTree;
+    logger->log(QString::number(_codeTreeFourth->capacity()));
+}
+
+void ImageAnalyser::setDepth(const QString depth)
+{
+    _tree_depth = depth.toInt();
+}
+
+void ImageAnalyser::startTreeConstruct(int depth)
+{
+    _codeTree->insert("0", getBstMedian("0"));
+    treeLevelConstruct(depth, "0");
+}
+
+void ImageAnalyser::treeLevelConstruct(int depth, const QString &bstCode)
+{
+    if (depth != 0)
+    {
+        depth--;
+        QList<QString> imagesList = _imageCode.keys(bstCode);
+        for (int i = 0; i < imagesList.size(); i++)
+        {
+            if (_imageMedian[imagesList[i]] <= _codeTree->value(bstCode))
+            {
+                _imageCode[imagesList[i]] = bstCode + "0";
+            }
+            else
+            {
+                _imageCode[imagesList[i]] = bstCode + "1";
+            }
+        }
+        _codeTree->insert(bstCode + "0", getBstMedian(bstCode + "0"));
+        _codeTree->insert(bstCode + "1", getBstMedian(bstCode + "1"));
+        treeLevelConstruct(depth, bstCode + "0");
+        treeLevelConstruct(depth, bstCode + "1");
+    }
+}
+
+int ImageAnalyser::getBstMedian(const QString &bstCode)
+{
+    for (int i = 0; i < COMPONENT_ARRAY_SIZE; i++)
+        _componentArray[i] = 0;
+    QList<QString> imagesList = _imageCode.keys(bstCode);
+
+    for (int i = 0; i < imagesList.size(); i++)
+    {
+        quint64 *tempArray = _imageComponent[imagesList[i]];
+        for (int i = 0; i < COMPONENT_ARRAY_SIZE; i++)
+        {
+            _componentArray[i] += (*tempArray);
+            tempArray++;
+        }
+    }
+    return getImageMedian(_componentArray);
+}
+
+void ImageAnalyser::analyseImage(const QImage &image, const QString &imageName, const int quarter)
+{
+    quint64 *imageComponentArray = new quint64[COMPONENT_ARRAY_SIZE];
+    for (int i = 0; i < COMPONENT_ARRAY_SIZE; i++)
+    {
+        *(imageComponentArray + i) = 0;
+    }
+
+    int startX = 0;
+    int startY = 0;
+    int endX = image.width();
+    int endY = image.height();
+    switch(quarter)
+    {
+    case 1:
+        endX = image.width() / 2;
+        endY = image.height() / 2;
+        break;
+    case 2:
+        startX = (image.width() / 2) + 1;
+        endY = image.height() / 2;
+        break;
+    case 3:
+        startY = (image.height() / 2) + 1;
+        endX = image.width() / 2;
+        break;
+    case 4:
+        startX = (image.width() / 2) + 1;
+        startY = (image.height() / 2) + 1;
+        break;
+    }
+
+    for (int y = startY; y < endY; y++)
+        for (int x = startX; x < endX; x++)
+        {
+           QRgb colorValue = image.pixel(x, y);
+           int blue = qBlue(colorValue);
+           int red = qRed(colorValue);
+           int green = qGreen(colorValue);
+           int comp;
+           switch (_component)
+           {
+           case true:
+               comp = ((red + green) >> 1) - blue + 255;
+               break;
+           case false:
+               comp = red - green + 255;
+               break;
+           default:
+               QMessageBox msgBox;
+               msgBox.setText(tr("Blad komponentu."));
+               msgBox.exec();
+           }
+           _componentArray[comp]++;
+           (*(imageComponentArray + comp))++;
+        }
+    _imageComponent.insert(imageName, imageComponentArray);
+
+
+
+    _imageMedian.insert(imageName, getImageMedian(imageComponentArray));
+    _imageCode.insert(imageName, "0");
+
+}
+
+int ImageAnalyser::getImageMedian(quint64* componentArray)
+{
+    quint64 median = 0;
+    quint64 medianPrim = 0;
+    quint64 amount = 0;
+    int j = 0;
+    for (int i = 0; i < COMPONENT_ARRAY_SIZE; i++)
+    {
+        amount += *(componentArray + i);
+    }
+    if (amount != 0 && amount % 2 == 0)
+    {
+        median = (amount >> 1);
+        medianPrim = median + 1;
+
+        int k = 0;
+        while (median > *(componentArray + j))
+        {
+            median -= *(componentArray + j);
+            j++;
+        }
+        while (medianPrim > *(componentArray + k))
+        {
+            medianPrim -= *(componentArray + k);
+            k++;
+        }
+
+        j = (j + k) >> 1;
+    }
+    else if (amount != 0 && amount % 2 == 1)
+    {
+        median = (amount + 1) >> 1;
+
+        while (median > *(componentArray + j))
+        {
+            median -= *(componentArray + j);
+            j++;
+        }
+    }
+    return j;
+}
+
+void ImageAnalyser::updateDatabase(const QString &bstQuarter)
+{
+    QSqlQuery query;
+    QHash<QString, QString>::const_iterator i = _imageCode.constBegin();
+    while (i != _imageCode.constEnd())
+    {
+        QString queryContent = "update images set " + bstQuarter + "='" + i.value() + "' where file='" + i.key() + "'";
+        query.exec(queryContent);
+        i++;
+    }
+
+}
+
+void ImageAnalyser::updateConfigFile()
+{
+    QFile * file = new QFile(_fileName);
+    if(!file->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Nie mozna zapisac drzewa wyszukiwania."));
+        msgBox.exec();
+    }
+    else
+    {
+        QTextStream out(file);
+        out << (_component?"BY":"RG") << "\n";
+        QHash<QString, int>::const_iterator i = _codeTree->constBegin();
+        while (i != _codeTree->constEnd())
+        {
+            out << i.key() << "\n" << i.value() << "\n";
+            i++;
+        }
+        file->close();
+    }
+}
+
+void ImageAnalyser::receiveColor(const QColor color)
+{
+    int comp = 0;
+    int blue = color.blue();
+    int red = color.red();
+    int green = color.green();
+    switch (_component)
+    {
+    case true:
+        comp = ((red + green) >> 1) - blue + 255;
+        break;
+    case false:
+        comp = red - green + 255;
+        break;
+    default:
+        QMessageBox msgBox;
+        msgBox.setText(tr("Blad komponentu"));
+        msgBox.exec();
+    }
+    chooseCodeTree(_quarter);
+    modCodeTree(_codeTree, _shift);
+    _currentColorKey = "0";
+    getKey(comp, _currentColorKey);
+    modCodeTree(_codeTree, -_shift);
+    emit sendBstCode(_currentColorKey);
+}
+
+void ImageAnalyser::getKey(int comp, QString &_currentColorKey)
+{
+
+    if (comp <= _codeTree->value(_currentColorKey) && _codeTree->contains(_currentColorKey + "0"))
+    {
+        _currentColorKey += "0";
+         getKey(comp, _currentColorKey);
+    }
+    else if (comp > _codeTree->value(_currentColorKey) && _codeTree->contains(_currentColorKey + "1"))
+    {
+        _currentColorKey += "1";
+        getKey(comp, _currentColorKey);
+    }
+
+}
+
+void ImageAnalyser::receiveFileName(const QString fileName)
+{
+    QImage *image = new QImage(fileName);
+
+    quint64 *imageComponentArray = new quint64[COMPONENT_ARRAY_SIZE];
+    for (int i = 0; i < COMPONENT_ARRAY_SIZE; i++)
+    {
+        *(imageComponentArray + i) = 0;
+    }
+
+    int startX = 0;
+    int startY = 0;
+    int endX = image->width();
+    int endY = image->height();
+    switch(_quarter)
+    {
+    case 1:
+        endX = image->width() / 2;
+        endY = image->height() / 2;
+        break;
+    case 2:
+        startX = (image->width() / 2) + 1;
+        endY = image->height() / 2;
+        break;
+    case 3:
+        startY = (image->height() / 2) + 1;
+        endX = image->width() / 2;
+        break;
+    case 4:
+        startX = (image->width() / 2) + 1;
+        startY = (image->height() / 2) + 1;
+        break;
+    }
+    for (int y = startY; y < endY; y++)
+        for (int x = startX; x < endX; x++)
+        {
+           QRgb colorValue = image->pixel(x, y);
+           int blue = qBlue(colorValue);
+           int red = qRed(colorValue);
+           int green = qGreen(colorValue);
+           int comp;
+           switch (_component)
+           {
+           case true:
+               comp = ((red + green) >> 1) - blue + 255;
+               break;
+           case false:
+               comp = red - green + 255;
+               break;
+           default:
+               QMessageBox msgBox;
+               msgBox.setText(tr("Blad komponentu"));
+               msgBox.exec();
+           }
+           (*(imageComponentArray + comp))++;
+        }
+    int imageMedian = getImageMedian(imageComponentArray);
+    QString _currentColorKey = "0";
+    chooseCodeTree(_quarter);
+    modCodeTree(_codeTree, _shift);
+    getKey(imageMedian, _currentColorKey);
+    modCodeTree(_codeTree, -_shift);
+    emit sendBstCode(_currentColorKey);
+}
+
+void ImageAnalyser::goToAncestor()
+{
+    _currentColorKey.chop(1);
+    emit sendBstCode(_currentColorKey);
+}
+
+void ImageAnalyser::goToLeftChild()
+{
+    _currentColorKey += "0";
+    emit sendBstCode(_currentColorKey);
+}
+
+void ImageAnalyser::goToRightChild()
+{
+    _currentColorKey += "1";
+    emit sendBstCode(_currentColorKey);
+}
+
+void ImageAnalyser::updateCurrentColor(const QString colorCode)
+{
+    _currentColorKey = colorCode;
+}
+
+void ImageAnalyser::getQuarter()
+{
+    QString qVal = "bst_key";
+    switch(_quarter)
+    {
+    case 0:
+        qVal = "bst_key";
+        break;
+    case 1:
+        qVal = "bk_first";
+        break;
+    case 2:
+        qVal = "bk_second";
+        break;
+    case 3:
+        qVal = "bk_third";
+        break;
+    case 4:
+        qVal = "bk_fourth";
+        break;
+    }
+    emit sendQuarterValue(qVal);
+}
+
+void ImageAnalyser::setQuarter(const int quarter)
+{
+    _quarter = quarter;
+}
+
+void ImageAnalyser::setShift(const int shift)
+{
+    _shift = shift;
+}
+
+void ImageAnalyser::modCodeTree(QHash<QString, int> *tree, int val)
+{
+    QHash<QString, int>::iterator i;
+    for(i = tree->begin(); i != tree->end(); i++)
+    {
+        i.value() += val;
+    }
+}
+
+void ImageAnalyser::chooseCodeTree(int quarter)
+{
+    switch(_quarter)
+    {
+    case 0:
+        _codeTree = _codeTreeZero;
+        break;
+    case 1:
+        _codeTree = _codeTreeFirst;
+        break;
+    case 2:
+        _codeTree = _codeTreeSecond;
+        break;
+    case 3:
+        _codeTree = _codeTreeThird;
+        break;
+    case 4:
+        _codeTree = _codeTreeFourth;
+        break;
+    }
+}

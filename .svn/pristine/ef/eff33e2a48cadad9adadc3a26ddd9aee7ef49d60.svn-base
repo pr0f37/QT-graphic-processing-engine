@@ -1,0 +1,18 @@
+#ifndef SIFTDESCRIPTOR_H
+#define SIFTDESCRIPTOR_H
+#include <QString>
+
+class SiftDescriptor
+{
+public:
+    SiftDescriptor();
+    SiftDescriptor(const QString &, double *);
+    SiftDescriptor(const QString &, double *, int);
+    double * _descriptor;
+    QString _name;
+    int _class;
+
+
+};
+
+#endif // SIFTDESCRIPTOR_H

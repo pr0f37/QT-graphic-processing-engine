@@ -1,0 +1,34 @@
+#ifndef LOGGER_H
+#define LOGGER_H
+
+#include <QObject>
+#include <QFile>
+#include <QMessageBox>
+#include <QTextStream>
+#include <QTime>
+#include <QDateTime>
+#include <QLinkedList>
+#include "siftdescriptor.h"
+#include "siftimage.h"
+
+
+class Logger : public QObject
+{
+    Q_OBJECT
+public:
+    explicit Logger(const QString&);
+    bool log(const QString&);
+    bool logSimple(const QString&);
+    bool logSimple(QLinkedList<SiftDescriptor*>&);
+    bool logSimple(QLinkedList<SiftImage*>&, short);
+    bool logSimple(SiftImage *, short);
+    bool logDistance(QLinkedList<SiftImage*>&);
+    bool logDistance(const QString &, QMap<uint, int> &);
+    bool logSimpleSIFT(QLinkedList<SiftImage*>&);
+    bool logSimple(int *, int *, int n, const QString &, int, int, int);
+    bool clearLogFile();
+private:
+    QFile *_logFile;
+};
+
+#endif // LOGGER_H

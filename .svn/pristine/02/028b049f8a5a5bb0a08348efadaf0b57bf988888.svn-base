@@ -1,0 +1,22 @@
+#ifndef LSSANALYSER_H
+#define LSSANALYSER_H
+#include "analyser.h"
+#include "cxcore.h"
+#include "cv.h"
+//#include "cvaux.h"
+#include "highgui.h"
+#include "ml.h"
+
+class LssAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+    LssAnalyser(const QString &, const QString &);
+    
+signals:
+    
+public slots:
+    
+};
+
+#endif // LSSANALYSER_H

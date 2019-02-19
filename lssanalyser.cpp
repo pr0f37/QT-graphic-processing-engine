@@ -1,0 +1,630 @@
+#include "lssanalyser.h"
+
+
+LssAnalyser::LssAnalyser(const QString &fileName, const QString &imageTableName):
+    Analyser(fileName, imageTableName)
+{
+    this->_dictWordsNum = 200;
+    this->_thresholdValue = 0.5;
+}
+
+void LssAnalyser::updateConfigFile()
+{
+    QString fileName = _fileName;
+    fileName.chop(4);
+    fileName += "_" + QString::number(this->_images.size()) + ".txt";
+    QFile * file = new QFile(fileName);
+    if(!file->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Nie mozna zapisac konfiguracji obrazow."));
+        msgBox.exec();
+    }
+    else
+    {
+        QTextStream out(file);
+        out << "<config>";
+        out << "<imagesCount>" << (this->_images.size()) << "</imagesCount>";
+        QLinkedListIterator<LssImage *> i(this->_images);
+        while (i.hasNext())
+        {
+            LssImage * img = i.next();
+            QString message = img->toString(this->_dictWordsNum);
+            out << "<image>" << message << "</image>";
+
+        }
+        out << "</config>";
+        file->close();
+    }
+
+    fileName = _fileName;
+    fileName.chop(4);
+    fileName += "_" + QString::number(this->_images.size()) +
+            "_" + QString::number(this->_dictionary.size()) + "_dict.txt";
+    file = new QFile(fileName);
+
+    if(!file->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Nie mozna zapisac konfiguracji slownika."));
+        msgBox.exec();
+    }
+    else
+    {
+        QTextStream out(file);
+        out << "<config>";
+        out << "<imagesCount>" << (this->_dictionary.size()) << "</imagesCount>";
+        QLinkedListIterator<LssDescriptor *> i(this->_dictionary);
+        while (i.hasNext())
+        {
+            LssDescriptor * desc = i.next();
+            QString message = desc->toString();
+            out << message;
+
+        }
+        out << "</config>";
+        file->close();
+    }
+}
+
+void LssAnalyser::analyseImage(const QImage &image, const QString &imageName)
+{
+
+}
+
+/* Aquiring an ensemble of LSS descriptors of single image */
+LssImage LssAnalyser::analyseImage(const QString &imageName)
+{
+    QString logFileName = imageName;
+    logFileName.chop(4);
+    logFileName = logFileName.remove(0, 40);
+    //Logger * log = new Logger(logFileName + "LSS.txt");
+    Mat img = imread(imageName.toStdString());
+    LssImage * lssImg = new LssImage();
+    if(!img.empty())
+    {
+
+        vector<float>* descriptors  = new vector<float>();
+        vector<Point>* locations = new vector<Point>();
+        Size winStride;
+        SelfSimDescriptor *desc = new SelfSimDescriptor();
+        desc->compute(img,*descriptors,winStride,*locations);
+        //log->log("*descriptors: " + QString::number(descriptors->size()));
+        //log->log("*descriptors/80: " + QString::number(descriptors->size()/80));
+        //log->log("*descriptors/80: " + QString::number((descriptors->size()/80)*80));
+        //int i = 0;
+        //for (vector<float>::iterator it = descriptors->begin()  ; it != descriptors->end(); ++it, i++)
+            //log->logSimple(QString::number(*it) + ((i % 80 == 0)?"\n":" "));
+        lssImg = new LssImage(new QString(imageName), descriptors);
+        this->getBthHistogram(*lssImg);
+    }
+   // this->readImgConfFile("D:\\QTprojects\\SQL-build-desktop\\logs\\" + logFileName + "LSS.txt");
+    //LssImage * lssImg2 = this->_images.first();
+   // QString XML = "<conf><image>" + lssImg2->toString(this->_dictWordsNum) + "</image></conf>";
+   // log2->logSimple(XML);
+    return lssImg;
+}
+
+void LssAnalyser::getBthHistogram(LssImage &image)
+{
+    int * hist = new int[this->_dictWordsNum];
+    for (int i = 0; i < this->_dictWordsNum; i++)
+        *(hist+i) = 0;
+    QMutableLinkedListIterator<LssDescriptor* > it(*(image._descriptors));
+    while(it.hasNext())
+        *(hist+this->getDescClosestClass(it.next())) += 1;
+    for (int i = 0; i < this->_dictWordsNum; i++)
+        if( (((double)*(hist+i))/(double)(image._descriptors->size()))*100 >= this->_thresholdValue)
+            *(hist+i) = 1;
+        else
+            *(hist+i) = 0;
+    image._bthHistogram = hist;
+}
+
+int LssAnalyser::getDescClosestClass(const LssDescriptor & desc)
+{
+    QMutableLinkedListIterator<LssDescriptor* > it(this->_dictionary);
+    double dist = numeric_limits<double>::max();
+    int cls = 0;
+    int i = 0;
+    LssDescriptor * tmpDesc, closestDesc;
+    while(it.hasNext())
+    {
+        tmpDesc = it.next();
+        double d = lssEuclideanDistance(desc, tmpDesc);
+        if (dist > d)
+        {
+            dist = d;
+            cls = i;
+            closestDesc = tmpDesc;
+        }
+        i++;
+    }
+    if (!this->_lssContainers.contains(cls))
+        this->_lssContainers.insert(cls, new LssClassContainer(cls));
+    LssDescriptor * descCopy = new LssDescriptor(desc);
+    this->_lssContainers[cls]->addClassToContainer(*descCopy);
+    return cls;
+}
+
+double LssAnalyser::lssEuclideanDistance(const LssDescriptor& fDescr, const LssDescriptor& sDescr)
+{
+    double distance = 0.0;
+    QLinkedListIterator<float> fIt(*(fDescr._descriptor));
+    QLinkedListIterator<float> sIt(*(sDescr._descriptor));
+    while(fIt.hasNext() && sIt.hasNext())
+    {
+        double di = fIt.next() - sIt.next();
+        distance += di*di;
+    }
+    distance = sqrt(distance);
+    return distance;
+}
+
+/* Create directory using randomly generated descriptors */
+void LssAnalyser::createDictionary()
+{
+    this->_dictionary.clear();
+    uint seed = (uint)QDateTime::currentDateTime().toTime_t();
+    qsrand(seed);
+    for (int i = 0; i < this->_dictWordsNum; i++)
+    {
+        QLinkedList<float> * vect = new QLinkedList<float>();
+        for (int j = 0; j < LssDescriptor::_descSize; j++)
+            vect->push_back((float)(qrand() % (LssDescriptor::_maxLssDescVal + 1))/(float)LssDescriptor::_maxLssDescVal);
+        this->_dictionary.push_back(new LssDescriptor(vect));
+    }
+
+}
+
+/* Used to create dictionary out of the most frequent descriptors in database,
+   then use kMeans algorithm to get better representatives */
+void LssAnalyser::updateDictionary()
+{
+    this->_dictionary.clear();
+    uint seed = (uint)QDateTime::currentDateTime().toTime_t();
+    qsrand(seed);
+    QMutableMapIterator<int, LssClassContainer *> ci(this->_lssContainers);
+    double powerSum = 0;
+    while (ci.hasNext())
+    {
+        LssClassContainer * container = ci.next().value();
+        powerSum += container->_power;
+    }
+    ci.toFront();
+    while (ci.hasNext())
+    {
+        LssClassContainer * container = ci.next().value();
+        for (int i = 0; i < qRound((double)this->_dictWordsNum * (container->_power / powerSum)) && this->_dictionary.size() < this->_dictWordsNum; i++)
+        {
+            int randValue = 0;
+            do
+                randValue =  qrand() % container->_power;
+            while(!container->_descriptors.contains(randValue));
+            LssDescriptor * newDictClass = new LssDescriptor(*(container->_descriptors.take(randValue))); // wyciagam z kontenera wylosowana wartoÄÂĂÂc i jej KOPIE umieszczam w slowniku
+            this->_dictionary << newDictClass;
+        }
+    }
+    for (int i = this->_dictionary.size(); i < this->_dictWordsNum; i++)
+    {
+        QLinkedList<float> * vect = new QLinkedList<float>();
+        for (int j = 0; j < LssDescriptor::_descSize; j++)
+            vect->push_back((float)(qrand() % (LssDescriptor::_maxLssDescVal + 1))/(float)LssDescriptor::_maxLssDescVal);
+        this->_dictionary.push_back(new LssDescriptor(vect));
+    }
+    this->kMeans();
+    QMutableLinkedListIterator<LssImage*> iIt(this->_images);
+    while(iIt.hasNext())
+        this->getBthHistogram(*(iIt.next()));
+    this->updateConfigFile();
+}
+
+void LssAnalyser::kMeans()
+{
+    int i = 0;
+    bool meanChanged = true;
+    while (meanChanged == true && i++ < 5)
+    {
+        this->_lssContainers.clear();
+        QMutableLinkedListIterator<LssImage *> iIt(this->_images);
+        while(iIt.hasNext())
+        {
+            LssImage * img = iIt.next();
+            QMutableLinkedListIterator<LssDescriptor *> dIt(*(img->_descriptors));
+            while(dIt.hasNext())             
+                this->getDescClosestClass(dIt.next());
+        }
+        meanChanged = findNewMeans();
+    }
+}
+
+bool LssAnalyser::findNewMeans()
+{
+    bool meanChanged = false;
+    QMutableLinkedListIterator<LssDescriptor *> dIt(this->_dictionary);
+    int cls = 0;
+    while (dIt.hasNext())
+    {
+        LssDescriptor * dict = dIt.next();
+        if (this->_lssContainers.contains(cls))
+        {
+            QList<LssDescriptor *> descList = this->_lssContainers[cls]->_descriptors.values();
+            LssDescriptor * newMean = this->findClassMean(descList);
+            if (newMean != 0)
+            {
+                double dist = this->lssEuclideanDistance(*dict, *newMean);
+                if (dist != 0)
+                {
+                    meanChanged = true;
+                    dict->_descriptor = newMean->_descriptor;
+                }
+            }
+        }
+        cls++;
+    }
+    return meanChanged;
+}
+
+LssDescriptor * LssAnalyser::findClassMean(QList<LssDescriptor *> &examples)
+{
+    int clsReps = 0;
+    QMutableListIterator<LssDescriptor *> eIt(examples);
+    QLinkedList<float> * descriptor = new QLinkedList<float>();
+    for (int i = 0; i < LssDescriptor::_descSize; i++)
+         descriptor->push_back(0.0f);
+    while (eIt.hasNext())
+    {
+        LssDescriptor * example = eIt.next();
+        clsReps++;
+        QMutableLinkedListIterator<float> dIt(*descriptor);
+        QLinkedListIterator<float> exIt(*(example->_descriptor));
+        while(dIt.hasNext() && exIt.hasNext())
+            dIt.next() += exIt.next();
+    }
+    if (clsReps != 0)
+    {
+        QMutableLinkedListIterator<float> dIt(*descriptor);
+        while(dIt.hasNext())
+            dIt.next() /= clsReps;
+        LssDescriptor * newMeanDesc = new LssDescriptor(descriptor);
+        return newMeanDesc;
+    }
+    return 0;
+}
+
+QString LssAnalyser::findClosestImages(LssImage &imageAnalysed, uint imageNumber)
+{
+    imageAnalysed._distances.clear();
+    QSqlQuery query;
+    QStringList * closestImages = new QStringList();
+    QMutableLinkedListIterator<LssImage *> imagesIt(this->_images);
+    Logger * log = new Logger("LSS_BTH.txt");
+    log->logBth(*(imageAnalysed._name), this->_dictWordsNum, imageAnalysed._bthHistogram);
+    while(imagesIt.hasNext())
+    {
+        LssImage * image = imagesIt.next();
+        log->logBth(*(image->_name), this->_dictWordsNum, image->_bthHistogram);
+        this->countDistances(imageAnalysed, *image);
+    }
+    QMutableMapIterator<uint, int> distIt(imageAnalysed._distances);
+    while(distIt.hasNext())
+    {
+        QMap<uint, int>::iterator it = distIt.next();
+        uint key = it.key();
+        if (key > imageNumber)
+            break;
+        int id = it.value();
+        closestImages->append(QString::number(id));
+        QString queryContent = "update images set bst_key ='" + QString::number(key)
+                + "' where id = " + QString::number(id) + "";
+        query.exec(queryContent);
+    }
+    return closestImages->join(",");
+}
+
+void LssAnalyser::analyseImageAndFindClosestImages(const QString &fileName)
+{
+    if(this->_dictionary.isEmpty())
+        this->readDictConfFile("LSS_Images_134_188_dict.txt");
+    if(this->_images.isEmpty())
+        this->readImgConfFile("LSS_Images_134.txt");
+
+    LssImage img = this->analyseImage(fileName);
+
+    QSqlQuery query;
+    QString queryContent = "update images set bst_key ='999999999'";
+    query.exec(queryContent);
+
+    QString list = this->findClosestImages(img, this->_distance);
+    emit this->sendIdValue(list);
+}
+
+void LssAnalyser::countDistances(LssImage &imageAnalysed, LssImage &image)
+{
+    uint  dist = 0;
+    dist += *(distance(imageAnalysed._bthHistogram, image._bthHistogram));
+    imageAnalysed._distances.insertMulti(dist, image._id); // TODO: zadbac o ID dla obrazu!!!!
+
+}
+
+uint * LssAnalyser::distance(int * image1Bth, int * image2Bth)
+{
+    uint * dist = new uint;
+
+    *(dist) = 0;
+    for (int i = 0; i < this->_dictWordsNum; i++)
+        *(dist) += (*(image1Bth+i) ^ *(image2Bth+i));
+
+    return dist;
+}
+
+void LssAnalyser::fillImageLssDescriptorsList()
+{
+    Logger * log = new Logger("LSS_fillImageLssDescriptorsList.txt");
+    this->_images.clear();
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel(this);
+    SelfSimDescriptor *desc = new SelfSimDescriptor();
+    imageTable->setTable(this->_imageTableName);
+    imageTable->select(); // reads image table from database
+    int imageCount = imageTable->rowCount();
+    for (int i = 0; i <imageCount; i++)
+    {
+        QSqlRecord record = imageTable->record(i); // reads one record from image table
+        QString fileQString = record.value("file").toString();
+        int fileId = record.value("id").toInt();
+
+        Mat img = imread(fileQString.toStdString());
+        LssImage * lssImg;
+
+        if(!img.empty())
+        {
+            log->log("Position: " + QString::number(i) + fileQString);
+            vector<float>* descriptors  = new vector<float>();
+//            vector<Point>* locations = new vector<Point>();
+//            Size winStride;
+            log->log("Position: " + QString::number(i) + " compute()");
+            desc->compute(img,*descriptors);
+            lssImg = new LssImage(0, fileId, new QString(fileQString), descriptors);
+            log->log("Position: " + QString::number(i) + " getBthHistogram()");
+            this->getBthHistogram(*lssImg);
+            log->log("Position: " + QString::number(i) + " _images.append()");
+            this->_images << lssImg;
+            delete descriptors;
+
+        }
+    }
+}
+
+bool LssAnalyser::readDictConfFile(const QString &dictFile)
+{
+    this->_dictionary.clear();
+    QFile * file = new QFile(dictFile);
+    bool isError = false;
+    if(!file->open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Nie mozna odczytac pliku konfiguracyjnego slownika obrazow."));
+        msgBox.exec();
+        return false;
+    }
+    else
+    {
+        QXmlStreamReader  * xml = new QXmlStreamReader(file);
+        QString tokenAsString;
+        while (!xml->atEnd() && !isError)
+        {
+            QXmlStreamReader::TokenType i = xml->readNext();
+            switch(i)
+            {
+                case QXmlStreamReader::StartElement:
+                    tokenAsString = xml->name().toString();
+                    if(tokenAsString == "descriptor")
+                        this->_dictionary << this->createLssDescriptorFromXML(xml);
+                    break;
+                case QXmlStreamReader::Characters:
+                    if(tokenAsString == "dictWordsNum")
+                    {
+                        int k = xml->text().toString().toInt();
+                        (this->_dictWordsNum == k)?(isError = false):(isError = true);
+                    }
+                    break;
+                case QXmlStreamReader::EndElement:
+                    tokenAsString = xml->name().toString();
+                    break;
+                case QXmlStreamReader::EndDocument:
+                    return true;
+                default:
+                    break;
+            }
+
+        }
+        if (xml->hasError() || isError)
+        {
+            QMessageBox msgBox;
+            msgBox.setText(tr("Blad skladni XML pliku konfiguracyjnego bazy obrazow."));
+            msgBox.exec();
+            return false;
+        }
+    }
+    return true;
+}
+
+bool LssAnalyser::readImgConfFile(const QString &imgFile)
+{
+    this->_images.clear();
+    this->_lssContainers.clear();
+
+    QFile * file = new QFile(imgFile);//"SIFT_Images_150.xml");
+
+
+    if(!file->open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Nie mozna odczytac pliku konfiguracyjnego bazy obrazow."));
+        msgBox.exec();
+        return false;
+    }
+    else
+    {
+        QXmlStreamReader  * xml = new QXmlStreamReader(file);
+        QString tokenAsString;
+        while (!xml->atEnd())
+        {
+            QXmlStreamReader::TokenType i = xml->readNext();
+            switch(i)
+            {
+                case QXmlStreamReader::StartElement:
+                    tokenAsString = xml->name().toString();
+                    if(tokenAsString == "image")
+                    {
+                        LssImage * img = createLssImgFromXML(xml);
+                        this->_images << img;
+                    }
+                    break;
+                case QXmlStreamReader::EndElement:
+                    tokenAsString = xml->name().toString();
+                    break;
+                default:
+                    break;
+            }
+
+        }
+        if (xml->hasError())
+        {
+            QMessageBox msgBox;
+            msgBox.setText(tr("Blad skladni XML pliku konfiguracyjnego bazy obrazow."));
+            msgBox.exec();
+            return false;
+        }
+    }
+
+    return true;
+}
+
+LssImage * LssAnalyser::createLssImgFromXML(QXmlStreamReader *xml)
+{
+    QString name;
+    int id = 0;
+    int cls = 0;
+    int * bth = new int[this->_dictWordsNum];
+    bool descriptorsListEnded = false;
+    bool descriptorsListStarted = false;
+    QLinkedList<LssDescriptor *> * descriptors = new QLinkedList<LssDescriptor *>();
+    QString tokenAsString;
+    QXmlStreamAttributes attributes;
+    const QString * text;
+    while (!xml->atEnd())
+    {
+        QXmlStreamReader::TokenType i = xml->readNext();
+
+        switch(i)
+        {
+            case QXmlStreamReader::StartElement:
+                tokenAsString = xml->name().toString();
+                attributes = xml->attributes();
+                if(tokenAsString == "descriptors" && !descriptorsListEnded && !descriptorsListStarted)
+                    descriptorsListStarted = true;
+                else if(tokenAsString == "descriptor" && !descriptorsListEnded && descriptorsListStarted)
+                    //descriptors->append(this->createLssDescriptorFromXML(xml));
+                    continue;
+                break;
+            case QXmlStreamReader::EndElement:
+                tokenAsString = xml->name().toString();
+                if(tokenAsString == "descriptors" && !descriptorsListEnded && descriptorsListStarted)
+                {
+                    descriptorsListStarted = false;
+                    descriptorsListEnded = true;
+                }
+                else if(tokenAsString == "image" && descriptorsListEnded && !descriptorsListStarted)
+                    return new LssImage(cls, id, new QString(name), bth, descriptors);
+                break;
+            case QXmlStreamReader::Characters:
+                text = xml->text().string();
+                if(tokenAsString == "id" && !descriptorsListStarted)
+                    id = text->toInt();
+                else if(tokenAsString == "name" && !descriptorsListStarted)
+                    name = *text;
+                else if(tokenAsString == "class" && !descriptorsListStarted)
+                    cls = text->toInt();
+                else if (tokenAsString == "bthHistogram")
+                {
+                    QStringList sl = text->split(";", QString::SkipEmptyParts);
+                    QStringListIterator si(sl);
+                    int i = 0;
+                    while (si.hasNext())
+                        *(bth+i++) = si.next().toInt();
+                }
+                break;
+            default:
+                break;
+        }
+
+    }
+    if (xml->hasError())
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Blad skladni XML pliku konfiguracyjnego bazy obrazow."));
+        msgBox.exec();
+    }
+    return NULL;
+}
+
+LssDescriptor * LssAnalyser::createLssDescriptorFromXML(QXmlStreamReader * xml)
+{
+    QLinkedList<float> * descriptor = new QLinkedList<float>();
+    QString tokenAsString = "descriptor";
+    QXmlStreamAttributes attributes;
+    const QString * text;
+    while (!xml->atEnd())
+    {
+        QXmlStreamReader::TokenType i = xml->readNext();
+
+        switch(i)
+        {
+            case QXmlStreamReader::StartElement:
+                tokenAsString = xml->name().toString();
+                attributes = xml->attributes();
+                break;
+            case QXmlStreamReader::EndElement:
+                tokenAsString = xml->name().toString();
+                if (tokenAsString == "descriptor")
+                    return new LssDescriptor(descriptor);
+                break;
+            case QXmlStreamReader::Characters:
+                text = xml->text().string();
+                if (tokenAsString == "descriptor")
+                {
+                    QStringList sl = text->split(";", QString::SkipEmptyParts);
+                    QStringListIterator si(sl);
+                    while (si.hasNext())
+                        descriptor->append(si.next().toFloat());
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    if (xml->hasError())
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Blad skladni XML pliku konfiguracyjnego bazy obraz."));
+        msgBox.exec();
+
+    }
+    return NULL;
+}
+
+void LssAnalyser::setDictWordsNum(short num)
+{
+    this->_dictWordsNum = num;
+}
+
+void LssAnalyser::setThresholdValue(double val)
+{
+    this->_thresholdValue = val;
+}
+
+void LssAnalyser::setDistance(uint val)
+{
+    this->_distance = val;
+}

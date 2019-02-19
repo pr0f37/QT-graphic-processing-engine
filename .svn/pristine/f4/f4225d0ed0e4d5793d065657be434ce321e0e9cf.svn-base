@@ -1,0 +1,13 @@
+#ifndef LSSDESCRIPTOR_H
+#define LSSDESCRIPTOR_H
+
+class LssDescriptor
+{
+public:
+    LssDescriptor();
+    LssDescriptor(float *);
+    LssDescriptor(LssDescriptor *);
+    float * _descriptor;
+};
+
+#endif // LSSDESCRIPTOR_H

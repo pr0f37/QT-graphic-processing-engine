@@ -1,0 +1,192 @@
+#include "bthareaanalyser.h"
+
+BthAreaAnalyser::BthAreaAnalyser(const QString &fileName, const QString &imageTableName, const int areaPosX, const int areaPosY, const int areaH, const int areaW) :
+    BthAnalyser(fileName, imageTableName)
+{
+    setArea(areaPosX, areaPosY, areaH, areaW);
+}
+BthAreaAnalyser::BthAreaAnalyser(const QString &fileName, const QString &imageTableName) :
+    BthAnalyser(fileName, imageTableName)
+{
+
+}
+
+void BthAreaAnalyser::setArea( const int areaPosX, const int areaPosY, const int areaH, const int areaW)
+{
+    _areaPosX = areaPosX;
+    _areaPosY = areaPosY;
+    _areaWidth = areaW;
+    _areaHeight = areaH;
+}
+
+void BthAreaAnalyser::analyseImage(const QImage& image)
+{
+    int windowWidth = image.width() / _widthBlocks;
+    int windowHeight = image.height() / _heightBlocks;
+    for (int i = 0; i < 40; i++)
+    {
+        _subblocks[i] = 0;
+    }
+    QFile *file = new QFile("BTHAreaFunc_TESTS.txt");
+    if(!file->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna zapisac bth na dysku"));
+       msgBox.exec();
+    }
+    else
+    {
+        QTextStream out(file);
+        for (int i = 0; i < _areaWidth * _areaHeight ; i++)
+        {
+            qint64 BTHistogram[29];
+            for (int j = 0; j < 29; j++)
+            {
+                BTHistogram[j] = 0;
+            }
+            out << "BLOCK" << i << ":\n";
+            for (int x = _areaPosX * windowWidth  + (i % _areaWidth) * windowWidth ; x < _areaPosX * windowWidth + (i % _areaWidth) * windowWidth + windowWidth; x++)
+            {
+                for (int y = _areaPosY * windowHeight + (i / _areaWidth)* windowHeight; y < _areaPosY * windowHeight + (i / _areaWidth) * windowHeight + windowHeight; y++)
+                {
+                    QColor colorValue =(QColor) image.pixel(x,y);
+                    int h = 0;
+                    int s = 0;
+                    int v = 0;
+                    colorValue.getHsv(&h,&s,&v);
+                    classifyColor(BTHistogram, h, s, v);
+                    out << "(" << x << ", " << y << ") ";
+                }
+                out << "\n";
+            }
+
+            _subblocks[i] = binarize(BTHistogram[0], windowWidth, windowHeight);
+        }
+    }
+    file->close();
+}
+
+void BthAreaAnalyser::receiveAreaH(const int height)
+{
+    _areaHeight = height;
+}
+
+void BthAreaAnalyser::receiveAreaW(const int width)
+{
+    _areaWidth = width;
+}
+
+void BthAreaAnalyser::receiveAreaPosX(const int posX)
+{
+    _areaPosX = posX;
+}
+
+void BthAreaAnalyser::receiveAreaPosY(const int posY)
+{
+    _areaPosY = posY;
+}
+
+void BthAreaAnalyser::receiveFileName(const QString fileName)
+{
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel();
+    QStringList *ids = new QStringList();
+    QImage *image = new QImage(fileName);
+    analyseImage(*image);
+    uint **distances = new uint *[2];
+    for (int i = 0; i < 2; i++)
+        distances[i] = new uint[IMAGES_AMOUNT];
+
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < IMAGES_AMOUNT; j++)
+            distances[i][j] = 2147483647;
+
+
+
+    imageTable->setTable(_imageTableName);
+    imageTable->select(); // reads image table from database
+    int imageCount = imageTable->rowCount();
+    for (int i = 0; i <imageCount; i++)
+    {
+        QSqlRecord record = imageTable->record(i);
+        uint dist = distance(record);
+        if (dist < _distThreshold && dist < distances[0][IMAGES_AMOUNT - 1])
+        {
+            distances[0][IMAGES_AMOUNT - 1] = dist;
+            distances[1][IMAGES_AMOUNT - 1] = record.value("id").toInt();
+            sort(distances);
+        }
+    }
+    for (int i = 0; i < IMAGES_AMOUNT; i++)
+    {
+        ids->append(QString::number(distances[1][i]));
+    }
+    QString id = ids->join(",");
+    emit sendBthIdValue(id);
+}
+
+uint BthAreaAnalyser::distance(const QSqlRecord &image1)
+{
+    uint dist = 0;
+    Logger *logger = new Logger(image1.value("file").toString() + ".txt");
+    logger->log("uint BthAreaAnalyser::distance(const QSqlRecord &image1)");
+    logger->log("Image: " + image1.value("file").toString());
+    QString **analysedImage = new QString *[_areaWidth];
+    int counter = 0;
+    for (int i = 0; i < _areaWidth; i++)
+        analysedImage[i] = new QString[_areaHeight];
+    for (int i = 0; i < _areaWidth; i++)
+        for (int j = 0; j < _areaHeight; j++)
+        {
+            analysedImage[i][j] = QString::number(_subblocks[counter++], 2);
+            while ((analysedImage[i][j]).length() < 29)
+            {
+                (analysedImage[i][j]).prepend("0");
+            }
+    }
+    logger->log("_areaHeight: " + QString::number(_areaHeight));
+    logger->log("_areaWidth: " + QString::number(_areaWidth));
+    logger->log("_areaPosX: " + QString::number(_areaPosX));
+    logger->log("_areaPosY: " + QString::number(_areaPosY));
+    QString **dataBaseImage = new QString *[_widthBlocks];
+    counter = 1;
+    for (int i = 0; i < _widthBlocks; i++)
+        dataBaseImage[i] = new QString[_heightBlocks];
+    for (int i = 0; i < _widthBlocks; i++)
+        for (int j = 0; j < _heightBlocks; j++)
+        {
+            QString subblock = "bth" + QString::number(counter++);
+            dataBaseImage[i][j] = image1.value(subblock).toString();
+    }
+
+    uint *distances = new uint[(_widthBlocks - _areaWidth + 1) * (_heightBlocks - _areaHeight + 1)]; //tablica odleg³oœci
+    counter = 0;
+    logger->log("DISTANCES:");
+    for (int i = 0; i < (_widthBlocks - _areaWidth + 1); i++)
+    {
+        for (int j = 0; j < (_heightBlocks - _areaHeight + 1); j++)
+        {
+            distances[counter] = 0;
+            for (int k = 0; k < _areaWidth; k++)
+                for (int l =0; l < _areaHeight; l++)
+                {
+                distances[counter] += partialDistance(dataBaseImage[i+k][j+l], analysedImage[k][l]);
+            }
+            logger->log("distances[" + QString::number(counter) + "] = " +  QString::number(distances[counter]));
+            counter++;
+        }
+    }
+    dist = min(distances);
+    logger->log("Min. distance = " + QString::number(dist));
+    return dist;
+}
+
+uint BthAreaAnalyser::min(const uint *distances)
+{
+    uint dist = distances[0];
+    for (int i = 1; i < (_widthBlocks - _areaWidth) * (_heightBlocks - _areaHeight); i++)
+    {
+        if (dist > distances[i])
+            dist = distances[i];
+    }
+    return dist;
+}

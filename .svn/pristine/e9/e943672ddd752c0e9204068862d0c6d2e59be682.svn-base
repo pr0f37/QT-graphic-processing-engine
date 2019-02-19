@@ -1,0 +1,52 @@
+#ifndef LSSANALYSER_H
+#define LSSANALYSER_H
+#include "analyser.h"
+#include "logger.h"
+#include "cxcore.h"
+#include "cv.h"
+#include "cvaux.h"
+#include "highgui.h"
+#include "ml.h"
+#include "lssimage.h"
+#include "lssclasscontainer.h"
+#include <QLinkedList>
+#include <QLinkedListIterator>
+using namespace cv;
+class LssAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+    QLinkedList<LssDescriptor *> _dictionary;
+    QLinkedList<LssImage *> _images;
+    QMap<int, LssClassContainer *> _lssContainers;
+    short _dictWordsNum;
+    double _thresholdValue;
+
+
+    LssAnalyser(const QString &, const QString &);
+    void analyseImage(const QImage &, const QString &);
+    LssImage analyseImage(const QString &);
+    void getBthHistogram(LssImage &);
+    int getDescClosestClass(const LssDescriptor&);
+    double lssEuclideanDistance(const LssDescriptor&, const LssDescriptor&);
+    void createDictionary();
+    void updateDictionary();
+    void kMeans();
+    bool findNewMeans();
+    LssDescriptor * findClassMean(QList<LssDescriptor *>&, int);
+    QString findClosestImages(LssImage &, uint);
+    void countDistances(LssImage &, LssImage&);
+    uint * distance(int *, int *);
+    void fillImageLssDescriptorsList();
+
+    void setDictWordsNum(short);
+    void setThresholdValue(double);
+
+
+signals:
+    
+public slots:
+
+};
+
+#endif // LSSANALYSER_H

@@ -1,0 +1,691 @@
+#include "mainwindow.h"
+#include "ui_mainwindow.h"
+
+
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui::MainWindow),
+    myGraphicView(new View("images")),
+    BNPage(new QWidget()),
+    BTHPage(new QWidget()),
+    BTHInitializeButton(new QPushButton("Przeanalizuj obrazy", this)),
+    BTHLoadButton(new QPushButton("Wczytaj analize", this)),
+    BTHSearchButton(new QPushButton("Szukaj", this)),
+    BTHLayout(new QGridLayout(this)),
+    BNMenuLayout(new QGridLayout(this)),
+    tabWidget(new QTabWidget(this)),
+    codeLabel(new QLabel("Indeks:", this, 0)),
+    codeEdit(new QLineEdit("0", this)),
+    codeButton(new QPushButton("Szukaj wg indeksu", this)),
+    colorButton(new QPushButton("Szukaj wg koloru", this)),
+    exampleButton(new QPushButton("Szukaj wg przykladu", this)),
+    componentLabel(new QLabel("Komponent koloru:", this, 0)),
+    rgComponentButton(new QRadioButton("RG", this)),
+    byComponentButton(new QRadioButton("BY", this)),
+    reBstTreeButton(new QPushButton("Odtworz BST", this)),
+    radioLayout(new QHBoxLayout(this)),
+    treeButtonsLayout(new QHBoxLayout(this)),
+    upButton(new QPushButton(QPixmap(":/up"), "", this)),
+    rightButton(new QPushButton(QPixmap(":/right"), "", this)),
+    leftButton(new QPushButton(QPixmap(":/left"), "", this)),
+    treeDepthLabel(new QLabel("Glebokosc BST:")),
+    treeDepthEdit(new QLineEdit("4", this)),
+    imageQuarterLabel(new QLabel("Cwiartka:")),
+    imageQuarterEdit(new QLineEdit("0", this)),
+    shiftLabel(new QLabel("Przesuniecie BST:")),
+    shiftEdit(new QLineEdit("0", this)),
+    shiftSlider(new QSlider(Qt::Horizontal, this)),
+    BTHSlider(new QSlider(Qt::Horizontal, this)),
+    BTHSliderLabel(new QLabel("Prog:", this)),
+    BTHSliderValue(new QLineEdit("0", this)),
+    BTHAreaButton(new QPushButton("Ustaw OZ", this)),
+    BTHRepeatButton(new QPushButton("Powtorz szukanie", this)),
+    BTHAreaIndicator(new QCheckBox("Obszar zainter.", this)),
+    BTHAreaWidthEdit(new QLineEdit("1", this)),
+    BTHAreaHeightEdit(new QLineEdit("1", this)),
+    BTHAreaPosXEdit(new QLineEdit("0", this)),
+    BTHAreaPosYEdit(new QLineEdit("0", this)),
+    BTHAreaWidthLabel(new QLabel("Szerokosc:")),
+    BTHAreaHeightLabel(new QLabel("Wysokosc:")),
+    BTHAreaPosXLabel(new QLabel("Pozycja X:")),
+    BTHAreaPosYLabel(new QLabel("Pozycja Y:")),
+    BTHAreaLayout(new QGridLayout(this)),
+    // SIFT
+    SIFTPage(new QWidget()),
+    SIFTLayout(new QGridLayout(this)),
+    SIFTDictRandButton(new QPushButton("Utw. slownika(losowanie)", this)),
+    SIFTKmeansButton(new QPushButton("Utw. slownika(Kmeans)", this)),
+    SIFTDrawImagesButton(new QPushButton("Losowanie obrazow", this)),
+    SIFTFindClosestImagesButton(new QPushButton("Znajdz podobne obrazy", this)),
+    SIFTNewDictionaryCheckBox(new QCheckBox("Nowy slownik", this)),
+    SIFTThresholdValueEdit(new QLineEdit("4", this)),
+    SIFTThresholdLabel(new QLabel("Wart. progu", this)),
+    SIFTBlockNumWEdit(new QLineEdit("1", this)),
+    SIFTBlockNumWLabel(new QLabel("Bloki szer.", this)),
+    SIFTBlockNumHEdit(new QLineEdit("1", this)),
+    SIFTBlockNumHLabel(new QLabel("Bloki wys.", this)),
+    SIFTImageNumEdit(new QLineEdit("1", this)),
+    SIFTImageNumLabel(new QLabel("Ilosc obrazow los.", this)),
+    SIFTMinValueEdit(new QLineEdit("0", this)),
+    SIFTMaxValueEdit(new QLineEdit("255", this)),
+    SIFTVectorNumLabel(new QLabel("Ilosc wektorow SIFT", this)),
+    SIFTVectorNumEdit(new QLineEdit("1000", this)),
+    SIFTBlocksLayout(new QHBoxLayout(this)),
+    SIFTBlocksWLayout(new QVBoxLayout(this)),
+    SIFTBlocksHLayout(new QVBoxLayout(this)),
+    SIFTMinMaxLayout(new QHBoxLayout(this)),
+    SIFTThresholdLayout(new QVBoxLayout(this)),
+    SIFTImageNumLayout(new QVBoxLayout(this)),
+    SIFTDrawImagesLayout(new QHBoxLayout(this)),
+    SIFTThresholdAndNewDictLayout(new QHBoxLayout(this)),
+    SIFTDistanceLabel(new QLabel("Odleglosc.", this)),
+    SIFTDistanceEdit(new QLineEdit("30", this)),
+    SIFTWordsNumberLabel(new QLabel("Liczba slow w slowniku", this)),
+    SIFTWordsNumberEdit(new QLineEdit("200", this))
+{
+    ui->setupUi(this);
+    byComponentButton->setChecked(true);
+
+    createAnalysers();
+    createConnections();
+    createTips();
+    createStatusBar();
+
+    ui->menuLayout->setSpacing(5);
+    ui->menuLayout->addWidget(tabWidget, 0, 0);
+
+    BNPage->setLayout(BNMenuLayout);
+    shiftSlider->setMinimum(-511);
+    shiftSlider->setMaximum(511);
+    shiftSlider->setValue(0);
+
+    BNMenuLayout->setSpacing(5);
+    BNMenuLayout->addWidget(componentLabel, 0, 0);
+    BNMenuLayout->addLayout(radioLayout, 1, 0);
+    BNMenuLayout->addWidget(treeDepthLabel, 2, 0);
+    BNMenuLayout->addWidget(treeDepthEdit, 3, 0);
+    BNMenuLayout->addWidget(reBstTreeButton, 4, 0);
+    BNMenuLayout->addWidget(imageQuarterLabel, 6, 0);
+    BNMenuLayout->addWidget(imageQuarterEdit, 7, 0);
+    BNMenuLayout->addWidget(shiftLabel, 8, 0);
+    BNMenuLayout->addWidget(shiftSlider, 9, 0);
+    BNMenuLayout->addWidget(shiftEdit, 10, 0);
+    BNMenuLayout->addWidget(codeLabel, 11, 0);
+    BNMenuLayout->addWidget(codeEdit, 12, 0);
+    BNMenuLayout->addWidget(codeButton, 13, 0);
+    BNMenuLayout->addWidget(colorButton, 14, 0);
+    BNMenuLayout->addWidget(exampleButton, 15, 0);
+    BNMenuLayout->addLayout(treeButtonsLayout, 16, 0);
+
+    enableBSTButtons(false);
+
+    treeButtonsLayout->addWidget(leftButton);
+    treeButtonsLayout->addWidget(upButton);
+    treeButtonsLayout->addWidget(rightButton);
+
+    radioLayout->addWidget(rgComponentButton);
+    radioLayout->addWidget(byComponentButton);
+
+    ui->gridLayout->addWidget(myGraphicView);
+
+    myGraphicView->showFullScreen();
+    myGraphicView->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    myGraphicView->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+
+    BTHSlider->setMinimum(0);
+    BTHSlider->setMaximum(500);
+    BTHSlider->setValue(500);
+
+    enableBTHButtons(false);
+
+    BTHPage->setLayout(BTHLayout);
+    BTHLayout->addWidget(BTHInitializeButton, 0, 0);
+    BTHLayout->addWidget(BTHLoadButton, 1, 0);
+    BTHLayout->addWidget(BTHAreaIndicator, 2, 0);
+    BTHLayout->addWidget(BTHAreaButton, 3, 0);
+
+
+    BTHLayout->addLayout(BTHAreaLayout, 4, 0);
+
+    BTHLayout->addWidget(BTHSearchButton, 5, 0);
+    BTHLayout->addWidget(BTHRepeatButton, 6, 0);
+    BTHLayout->addWidget(BTHSliderLabel, 7, 0);
+    BTHLayout->addWidget(BTHSlider, 8, 0);
+    BTHLayout->addWidget(BTHSliderValue, 9, 0);
+
+    BTHAreaWidthEdit->setMaximumWidth(20);
+    BTHAreaHeightEdit->setMaximumWidth(20);
+    BTHAreaPosXEdit->setMaximumWidth(20);
+    BTHAreaPosYEdit->setMaximumWidth(20);
+    BTHAreaLayout->addWidget(BTHAreaWidthLabel, 0, 0);
+    BTHAreaLayout->addWidget(BTHAreaWidthEdit, 0, 1);
+    BTHAreaLayout->addWidget(BTHAreaHeightLabel, 1, 0);
+    BTHAreaLayout->addWidget(BTHAreaHeightEdit, 1, 1);
+    BTHAreaLayout->addWidget(BTHAreaPosXLabel, 2, 0);
+    BTHAreaLayout->addWidget(BTHAreaPosXEdit, 2, 1);
+    BTHAreaLayout->addWidget(BTHAreaPosYLabel, 3, 0);
+    BTHAreaLayout->addWidget(BTHAreaPosYEdit, 3, 1);
+    // SIFT
+    SIFTBlocksWLayout->addWidget(SIFTBlockNumWLabel);
+    SIFTBlocksWLayout->addWidget(SIFTBlockNumWEdit);
+    SIFTBlocksHLayout->addWidget(SIFTBlockNumHLabel);
+    SIFTBlocksHLayout->addWidget(SIFTBlockNumHEdit);
+
+    SIFTBlocksLayout->addLayout(SIFTBlocksWLayout);
+    SIFTBlocksLayout->addLayout(SIFTBlocksHLayout);
+
+    SIFTMinMaxLayout->addWidget(SIFTMinValueEdit);
+    SIFTMinMaxLayout->addWidget(SIFTMaxValueEdit);
+
+    SIFTThresholdLayout->addWidget(SIFTThresholdLabel);
+    SIFTThresholdLayout->addWidget(SIFTThresholdValueEdit);
+
+    SIFTThresholdAndNewDictLayout->addLayout(SIFTThresholdLayout);
+    SIFTThresholdAndNewDictLayout->addWidget(SIFTNewDictionaryCheckBox);
+
+    //SIFTImageNumLayout->addWidget(SIFTImageNumLabel);
+    //SIFTImageNumLayout->addWidget(SIFTImageNumEdit);
+
+    //SIFTDrawImagesLayout->addWidget(SIFTDrawImagesButton);
+    SIFTDrawImagesLayout->addLayout(SIFTImageNumLayout);
+
+
+    SIFTPage->setLayout(SIFTLayout);
+    SIFTLayout->addWidget(SIFTDictRandButton, 0, 0);//, 10, 40);
+    SIFTLayout->addWidget(SIFTKmeansButton, 1, 0);//, 10, 40);
+    SIFTLayout->addWidget(SIFTFindClosestImagesButton, 2, 0);
+
+    SIFTLayout->addLayout(SIFTThresholdAndNewDictLayout, 3, 0);
+    SIFTLayout->addWidget(SIFTDistanceLabel, 4, 0);
+    SIFTLayout->addWidget(SIFTDistanceEdit, 5, 0);
+
+    SIFTLayout->addLayout(SIFTBlocksLayout, 6, 0);
+
+    SIFTLayout->addLayout(SIFTDrawImagesLayout, 7, 0);
+
+    //SIFTLayout->addWidget(SIFTVectorNumLabel, 8, 0);
+    //SIFTLayout->addWidget(SIFTVectorNumEdit, 9, 0);
+    //SIFTLayout->addLayout(SIFTMinMaxLayout, 10, 0);
+    SIFTLayout->addWidget(SIFTWordsNumberLabel, 11, 0);
+    SIFTLayout->addWidget(SIFTWordsNumberEdit, 12, 0);
+
+    SIFTNewDictionaryCheckBox->setChecked(false);
+    // dodawanie zakladek
+    tabWidget->setMaximumHeight(400);
+    tabWidget->setMaximumWidth(150) ;
+    tabWidget->addTab(SIFTPage, "SIFT");
+    tabWidget->addTab(BNPage,"BST");
+    tabWidget->addTab(BTHPage, "BTH");
+
+    tabWidget->setTabEnabled(1,false);
+    tabWidget->setTabEnabled(2,false);
+    setWindowTitle("System nawigacji graficznej");
+}
+
+void MainWindow::getFileName()
+{
+    if (checkQuarter((imageQuarterEdit->text()).toInt()) && checkShift(shiftEdit->text().toInt()))
+    {
+        emit sendShift(shiftEdit->text().toInt());
+        emit sendQuarter((imageQuarterEdit->text()).toInt());
+        QString fileName = QFileDialog::getOpenFileName(this,
+                         tr("Open Image"), "/home/", tr("Image Files (*.png *.jpg *.bmp *.tif)"));
+        emit sendFileName(fileName);
+    }
+}
+
+void MainWindow::getFileNameBTH(const QString action)
+{
+    Logger *logg = new Logger("getFileNameBTH.txt");
+    if (BTHAreaIndicator->isChecked() != true)
+    {
+        if (action == "get")
+            _BTHFileName = QFileDialog::getOpenFileName(this,
+                     tr("Open Image"), "/home/", tr("Image Files (*.png *.jpg *.bmp *.tif)"));
+        logg->log(_BTHFileName);
+        emit sendThreesholdValue(BTHSliderValue->text().toInt());
+        emit sendFileNameBTH(_BTHFileName);
+        BTHRepeatButton->setEnabled(true);
+    }
+    else
+    {
+        int posX = BTHAreaPosXEdit->text().toInt();
+        int posY = BTHAreaPosYEdit->text().toInt();
+        int height = BTHAreaHeightEdit->text().toInt();
+        int width = BTHAreaWidthEdit->text().toInt();
+        int threeshold = BTHSliderValue->text().toInt();
+        QMessageBox msgBox;
+
+        if (posX < 0 || posX > 7)
+        {
+            msgBox.setText("Pozycja X obszaru zainteresowania powinna znajdowac sie w przedziale [0-7]");
+            msgBox.exec();
+        }
+        else if (posY < 0 || posY > 4 )
+        {
+            msgBox.setText("Pozycja Y obszaru zainteresowania powinna znajdowaæ sie w przedziale [0-4]");
+            msgBox.exec();
+        }
+        else if (width < 1 || height < 1
+                 || posX + width < 0 || posX + width > 8
+                 || posY + height < 0 || posY + height > 5)
+        {
+            msgBox.setText("Obszar zainteresowania wykracza poza obraz (zbyt duza szerokosc lub wysokosc)");
+            msgBox.exec();
+        }
+        else if (threeshold < 0 || threeshold > 500)
+        {
+            msgBox.setText("Prog zainteresowania powinien znajdowac sie w przedziale [0-500]");
+            msgBox.exec();
+        }
+        else
+        {
+            if (action == "get")
+                _BTHFileName = QFileDialog::getOpenFileName(this,
+                         tr("Open Image"), "/home/", tr("Image Files (*.png *.jpg *.bmp *.tif)"));
+            logg->log(_BTHFileName);
+            emit sendAreaPosX(posX);
+            emit sendAreaPosY(posY);
+            emit sendAreaH(height);
+            emit sendAreaW(width);
+            emit sendThreesholdValueA(threeshold);
+            emit sendFileNameBTHA(_BTHFileName);
+            BTHRepeatButton->setEnabled(true);
+        }
+    }
+
+}
+
+void MainWindow::showColorWindow()
+{
+    if (checkQuarter((imageQuarterEdit->text()).toInt()) && checkShift(shiftEdit->text().toInt()))
+    {
+        emit sendShift(shiftEdit->text().toInt());
+        emit sendQuarter((imageQuarterEdit->text()).toInt());
+        emit sendColor(colorWindow->getColor());
+    }
+}
+
+bool MainWindow::checkQuarter(const int quarter)
+{
+    if (quarter < 0 || quarter > 4)
+    {
+        QMessageBox msgBox;
+        msgBox.setText("Wartosc cwiartki obrazu jest nieprawidlowa - mozliwe wartosci [0,4]");
+        msgBox.exec();
+        return false;
+    }
+    return true;
+}
+
+bool MainWindow::checkShift(const int shift)
+{
+    if (shift < -511 || shift > 511)
+    {
+        QMessageBox msgBox;
+        msgBox.setText("Wartosc przesuniecia drzewa wyszukiwania jest nieprawidlowa - mozliwe wartosci [-511, 511]");
+        msgBox.exec();
+        return false;
+    }
+    return true;
+}
+
+void MainWindow::readBstCode()
+{
+    if (checkQuarter((imageQuarterEdit->text()).toInt()))
+    {
+        emit sendQuarter((imageQuarterEdit->text()).toInt());
+        emit sendBstCode(codeEdit->text());
+    }
+}
+
+void MainWindow::readBstCode(const QString code)
+{
+    if (checkQuarter((imageQuarterEdit->text()).toInt()))
+    {
+        emit sendQuarter((imageQuarterEdit->text()).toInt());
+        codeEdit->setText(code);
+        emit sendBstCode(code);
+    }
+}
+
+MainWindow::~MainWindow()
+{
+    QSqlDatabase db;
+    db.close();
+    delete ui;
+}
+
+void MainWindow::setComponentRadio(const QString component)
+{
+    if (component ==  "RG")
+    {
+        rgComponentButton->setChecked(true);
+        byComponentButton->setChecked(false);
+    }
+    else if (component == "BY")
+    {
+        rgComponentButton->setChecked(false);
+        byComponentButton->setChecked(true);
+    }
+    else
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Blad komponentus"));
+        msgBox.exec();
+    }
+}
+
+void MainWindow::reConstructTree()
+{
+
+    emit sendDepthLevel(treeDepthEdit->text());
+    if (rgComponentButton->isChecked())
+        analyser->setComponent("RG");
+    else if (byComponentButton->isChecked())
+        analyser->setComponent("BY");
+
+    emit sendBstCode("0");
+    codeEdit->setText("0");
+    enableBSTButtons(true);
+}
+
+void MainWindow::changeValue(int newValue)
+{
+    BTHSliderValue->setText(QString::number(newValue));
+}
+
+void MainWindow::changeShift(int newValue)
+{
+    shiftEdit->setText(QString::number(newValue));
+}
+
+void MainWindow::bthEnableAndInitialize()
+{
+    enableBTHButtons(true);
+    emit bthInitialize();
+}
+
+void MainWindow::bthEnableAndLoad()
+{
+    enableBTHButtons(true);
+    emit bthLoad();
+}
+
+void MainWindow::bthSearchButtonClicked()
+{
+    getFileNameBTH("get");
+}
+
+void MainWindow::bthRepeatButtonClicked()
+{
+    getFileNameBTH("repeat");
+}
+
+void MainWindow::siftBorderExtractionButtonClicked()
+{
+
+    InfoWindow *window;
+    QImage *image = new QImage("D:\\QTprojects\\SQL-build-desktop\\images\\penguins.png");
+                               //chrysanthemum.png");
+    sendUserParameters(true);
+    siftAnalyser->analyseImage(image);
+    window = new InfoWindow(*image, this);
+
+    window->show();
+}
+
+void MainWindow::siftBorderExtractionButton2Clicked()
+{
+
+    InfoWindow *window;
+    QImage *image = new QImage("D:\\QTprojects\\SQL-build-desktop\\images\\penguins.png");
+
+    sendUserParameters(true);
+    siftAnalyser->createDictionary();
+    window = new InfoWindow(*image, this);
+
+    window->show();
+}
+
+
+void MainWindow::siftDrawImagesButtonClicked()
+{
+    InfoWindow *window;
+    QImage *image = new QImage("D:\\QTprojects\\SQL-build-desktop\\images\\penguins.png");
+                               //chrysanthemum.png");
+    sendUserParameters(false);
+    siftAnalyser->drawAndAnalyseImage(image);
+    window = new InfoWindow(*image, this);
+
+    window->show();
+}
+
+void MainWindow::siftFindClosestImagesButtonClicked()
+{
+    _BTHFileName = QFileDialog::getOpenFileName(this,
+             tr("Open Image"), "/home/", tr("Image Files (*.png *.jpg *.bmp *.tif)"));
+    if (_BTHFileName != "")
+    {
+        sendUserParameters(true);
+        siftAnalyser->analyseAndFindClosestImages(_BTHFileName);
+    }
+
+}
+
+void MainWindow::createStatusBar()
+{
+    ui->statusBar->setEnabled(true);
+    ui->statusBar->showMessage("Witaj!", 2000);
+}
+
+void MainWindow::createConnections()
+{
+    connect(analyser, SIGNAL(componentRead(QString)), this, SLOT(setComponentRadio(QString)));
+    connect(codeButton, SIGNAL(clicked()), this, SLOT(readBstCode()));
+    connect(this, SIGNAL(sendBstCode(QString)), myGraphicView, SLOT(updateItems(QString)));
+    connect(this, SIGNAL(sendBstCode(QString)), analyser, SLOT(updateCurrentColor(QString)));
+    connect(reBstTreeButton, SIGNAL(clicked()), this, SLOT(reConstructTree()));
+    connect(colorButton, SIGNAL(clicked()), this, SLOT(showColorWindow()));
+    connect(this, SIGNAL(sendColor(QColor)), analyser, SLOT(receiveColor(QColor)));
+    connect(analyser, SIGNAL(sendBstCode(QString)), this, SLOT(readBstCode(QString)));
+    connect(exampleButton, SIGNAL(clicked()), this, SLOT(getFileName()));
+    connect(this, SIGNAL(sendFileName(QString)), analyser, SLOT(receiveFileName(QString)));
+    connect(upButton, SIGNAL(clicked()), analyser, SLOT(goToAncestor()));
+    connect(leftButton, SIGNAL(clicked()), analyser, SLOT(goToLeftChild()));
+    connect(rightButton, SIGNAL(clicked()), analyser, SLOT(goToRightChild()));
+    connect(this, SIGNAL(sendDepthLevel(QString)), analyser, SLOT(setDepth(QString)));
+    connect(BTHInitializeButton,SIGNAL(clicked()), this, SLOT(bthEnableAndInitialize()));
+    connect(BTHLoadButton, SIGNAL(clicked()), this, SLOT(bthEnableAndLoad()));
+    connect(this,SIGNAL(bthInitialize()), bthanalyser, SLOT(BTHInitialize()));
+    connect(this, SIGNAL(bthLoad()), bthanalyser, SLOT(BTHLoad()));
+    connect(BTHSearchButton, SIGNAL(clicked()), this, SLOT(bthSearchButtonClicked()));
+    connect(BTHRepeatButton, SIGNAL(clicked()), this, SLOT(bthRepeatButtonClicked()));
+    connect(this, SIGNAL(sendFileNameBTH(QString)), bthanalyser, SLOT(receiveFileName(QString)));
+    connect(bthanalyser, SIGNAL(sendBthIdValue(QString)), myGraphicView, SLOT(updateItemsBth(QString)));
+    connect(bthareaanalyser, SIGNAL(sendBthIdValue(QString)), myGraphicView, SLOT(updateItemsBth(QString)));
+    connect(siftAnalyser, SIGNAL(sendIdValue(QString)), myGraphicView, SLOT(updateItemsSift(QString)));
+    connect(shiftSlider, SIGNAL(valueChanged(int)), this, SLOT(changeShift(int)));
+    connect(BTHSlider, SIGNAL(valueChanged(int)), this, SLOT(changeValue(int)));
+    connect(this, SIGNAL(sendThreesholdValue(int)), bthanalyser, SLOT(receiveThreesholdValue(int)));
+    connect(this, SIGNAL(sendThreesholdValueA(int)), bthareaanalyser, SLOT(receiveThreesholdValue(int)));
+    connect(this, SIGNAL(sendFileNameBTHA(QString)), bthareaanalyser, SLOT(receiveFileName(QString)));
+    connect(this, SIGNAL(sendAreaPosX(int)), bthareaanalyser, SLOT(receiveAreaPosX(int)));
+    connect(this, SIGNAL(sendAreaPosY(int)), bthareaanalyser, SLOT(receiveAreaPosY(int)));
+    connect(this, SIGNAL(sendAreaH(int)), bthareaanalyser, SLOT(receiveAreaH(int)));
+    connect(this, SIGNAL(sendAreaW(int)), bthareaanalyser, SLOT(receiveAreaW(int)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaButton, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaWidthEdit, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaHeightEdit, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaPosXEdit, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaPosYEdit, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaWidthLabel, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaHeightLabel, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaPosXLabel, SLOT(setEnabled(bool)));
+    connect(BTHAreaIndicator, SIGNAL(toggled(bool)), BTHAreaPosYLabel, SLOT(setEnabled(bool)));
+    connect(this, SIGNAL(sendQuarter(int)), analyser, SLOT(setQuarter(int)));
+    connect(this, SIGNAL(sendShift(int)), analyser, SLOT(setShift(int)));
+    connect(this, SIGNAL(sendQuarter(int)), myGraphicView, SLOT(setBstQuarter(int)));
+    // temporarily
+    connect(SIFTDictRandButton, SIGNAL(clicked()), this, SLOT(siftBorderExtractionButtonClicked()));
+    connect(SIFTKmeansButton, SIGNAL(clicked()), this, SLOT(siftBorderExtractionButton2Clicked()));
+    connect(SIFTDrawImagesButton, SIGNAL(clicked()), this, SLOT(siftDrawImagesButtonClicked()));
+    connect(SIFTFindClosestImagesButton, SIGNAL(clicked()), this, SLOT(siftFindClosestImagesButtonClicked()));
+}
+
+void MainWindow::createAnalysers()
+{
+    colorWindow = new QColorDialog(this);
+    analyser = new ImageAnalyser("bstTree.txt", "images");
+    bthanalyser = new BthAnalyser("bstTree.txt", "images");
+    bthareaanalyser = new BthAreaAnalyser("bstTree.txt", "images");
+    siftAnalyser = new SiftAnalyser("SIFT_Images.txt", "images");
+    lssAnalyser = new LssAnalyser("LSS_Images.txt", "images");
+
+    //analyser->initTree();
+    this->sendUserParameters(false);
+    siftAnalyser->init();
+
+    lssAnalyser->createDictionary();
+    lssAnalyser->fillImageLssDescriptorsList();
+
+    lssAnalyser->updateDictionary();
+    lssAnalyser->analyseImage("D:\\QTprojects\\SQL-build-desktop\\images\\Aimage_0002.jpg");
+
+
+}
+
+void MainWindow::createTips()
+{
+    reBstTreeButton->setStatusTip(tr("Rozpocznij analize i indeksowanie obrazow w bazie danych wedlug zadanych kryteriow (czas trwania ok 60 sek.)"));
+    codeButton->setStatusTip("Wyszukaj obrazy o indeksie rownym podanemu, lub powtorz ostatnie wyszukiwanie dla zmienionych kryteriow wyszukiwania");
+    colorButton->setStatusTip("Wyszukaj obrazy o kolorze wiodacym rownym wybranemu");
+    exampleButton->setStatusTip("Wyszukaj obrazy poprzez zapytanie przez przyklad");
+    upButton->setStatusTip("Wyswietl obrazy rodzica aktualnego wezla");
+    leftButton->setStatusTip("Wyswietl obrazy lewego dziecka aktualnego wezla");
+    rightButton->setStatusTip("Wyswietl obrazy prawego dziecka aktualnego wezla");
+    rgComponentButton->setStatusTip("RG - komponet barwny, ktory zostanie uzyty przy nastepnym indeksowaniu obrazow");
+    byComponentButton->setStatusTip("BY - komponet barwny, ktory zostanie uzyty przy nastepnym indeksowaniu obrazow");
+    treeDepthEdit->setStatusTip("Glebokosc drzewa indeksowania, ktore zostanie stworzone przy nastepnym indeksowaniu obrazow");
+    imageQuarterEdit->setStatusTip("0 - caly obraz, cwiartki obrazu: 1 - lewa gorna, 2 - prawa gorna, 3 - lewa dolna, 4 - prawa dolna");
+    shiftSlider->setStatusTip("Ustawia przesuniecie drzewa indeksowania o wyswietlona ponizej wielkosc");
+    shiftEdit->setStatusTip("Ustawia przesuniecie drzewa indeksowania o wprowadzona wielkosc");
+    BTHInitializeButton->setStatusTip("Rozpocznij analize obrazow w bazie danych (czas trwania ok 180 sek.)");
+    BTHLoadButton->setStatusTip("Zaladuj konfiguracje z zewnetrznego pliku");
+    BTHAreaIndicator->setStatusTip("Uaktywnij przyciski s³uzace do ustawiania obszaru zainteresowania");
+    BTHAreaButton->setStatusTip("Ustaw wybrany obszar zainteresowania");
+    BTHSearchButton->setStatusTip("Rozpocznij przeszukiwanie bazy obrazow metoda BTH poprzez zapytanie przez przyklad");
+    BTHRepeatButton->setStatusTip("Powtorz ostatnie wyszukiwanie dla wybranych kryteriow");
+    BTHSlider->setStatusTip("Ustaw prog podobienstwa obrazow");
+    BTHSliderValue->setStatusTip("Prog podobienstwa (0-500) - im jest mniejszy, tym obrazy wyszukiwane sa bardziej podobne do podawanego przykladu");
+    BTHAreaWidthEdit->setStatusTip("Szerokosc obszaru zainteresowania w blokach (1-8)");
+    BTHAreaHeightEdit->setStatusTip("Wysokosc obszaru zainteresowania w blokach (1-5)");
+    BTHAreaPosXEdit->setStatusTip("Rzedna pozycji obszaru zainteresowania w blokach (0-7)");
+    BTHAreaPosYEdit->setStatusTip("Odcieta pozycji obszaru zainteresowania w blokach (0-4)");
+}
+
+void MainWindow::enableBSTButtons(const bool &enablement)
+{
+    imageQuarterLabel->setEnabled(enablement);
+    imageQuarterEdit->setEnabled(enablement);
+    shiftLabel->setEnabled(enablement);
+    shiftSlider->setEnabled(enablement);
+    shiftEdit->setEnabled(enablement);
+    codeLabel->setEnabled(enablement);
+    codeEdit->setEnabled(enablement);
+    codeButton->setEnabled(enablement);
+    colorButton->setEnabled(enablement);
+    exampleButton->setEnabled(enablement);
+    upButton->setEnabled(enablement);
+    leftButton->setEnabled(enablement);
+    rightButton->setEnabled(enablement);
+}
+
+void MainWindow::enableBTHButtons(const bool &enablement)
+{
+    BTHAreaIndicator->setEnabled(enablement);
+    BTHSearchButton->setEnabled(enablement);
+    BTHSlider->setEnabled(enablement);
+    BTHSliderLabel->setEnabled(enablement);
+    BTHSliderValue->setEnabled(enablement);
+    BTHRepeatButton->setEnabled(false);
+    BTHAreaButton->setEnabled(false);
+    BTHAreaHeightLabel->setEnabled(false);
+    BTHAreaHeightEdit->setEnabled(false);
+    BTHAreaWidthLabel->setEnabled(false);
+    BTHAreaWidthEdit->setEnabled(false);
+    BTHAreaPosXLabel->setEnabled(false);
+    BTHAreaPosXEdit->setEnabled(false);
+    BTHAreaPosYLabel->setEnabled(false);
+    BTHAreaPosYEdit->setEnabled(false);
+    BTHAreaIndicator->setChecked(false);
+}
+
+void MainWindow::sendUserParameters(const bool &blocks)
+{
+    bool ok = true;
+    double threshold = 4;
+    int imgNum = 20;
+    int minVal = 0;
+    int maxVal = 255;
+    int vectNum = 1000;
+    int blockNumH = 1;
+    int blockNumW = 1;
+    short wordsNum = 200;
+    int distance = 40;
+
+    // sprawdzam czy wartosc progu w textedit nie jest pusta
+    if (this->SIFTThresholdValueEdit->text().isEmpty())
+        this->SIFTThresholdValueEdit->setText(QString::number(4));
+    if (this->SIFTImageNumEdit->text().isEmpty())
+        this->SIFTImageNumEdit->setText(QString::number(1000));
+    if (this->SIFTMinValueEdit->text().isEmpty())
+        this->SIFTMinValueEdit->setText(QString::number(0));
+    if (this->SIFTMaxValueEdit->text().isEmpty())
+        this->SIFTMaxValueEdit->setText(QString::number(255));
+    if (this->SIFTDistanceEdit->text().isEmpty())
+        this->SIFTDistanceEdit->setText(QString::number(40));
+    if (this->SIFTWordsNumberEdit->text().isEmpty())
+        this->SIFTWordsNumberEdit->setText(QString::number(200));
+    // proba pobrania wartosci z pola
+    threshold = this->SIFTThresholdValueEdit->text().toDouble(&ok);
+    if (ok) // jesli pobranie wartosci odnioslo sukces - ok bedzie ustawione na true
+        siftAnalyser->setThresholdValue(threshold);// wysylam wartosc bezwzgledna progu
+    imgNum = this->SIFTImageNumEdit->text().toInt(&ok);
+    if (ok) // jesli pobranie wartosci odnioslo sukces - ok bedzie ustawione na true
+        siftAnalyser->setImagesNum(abs(imgNum));// wysylam wartosc bezwzgledna progu
+    minVal = this->SIFTMinValueEdit->text().toInt(&ok);
+    if (ok) // jesli pobranie wartosci odnioslo sukces - ok bedzie ustawione na true
+        siftAnalyser->setMinValue(minVal);// wysylam wartosc bezwzgledna progu
+    maxVal = this->SIFTMaxValueEdit->text().toInt(&ok);
+    if (ok) // jesli pobranie wartosci odnioslo sukces - ok bedzie ustawione na true
+        siftAnalyser->setMaxValue(maxVal);// wysylam wartosc bezwzgledna progu
+    vectNum = this->SIFTVectorNumEdit->text().toInt(&ok);
+    if (ok) // jesli pobranie wartosci odnioslo sukces - ok bedzie ustawione na true
+        siftAnalyser->setVectNum(vectNum);// wysylam wartosc bezwzgledna progu
+    wordsNum = this->SIFTWordsNumberEdit->text().toShort(&ok);
+    if (ok)
+    {
+        siftAnalyser->setNumberOfWords(wordsNum);
+        lssAnalyser->setDictWordsNum(wordsNum);
+    }
+    distance = this->SIFTDistanceEdit->text().toInt(&ok);
+    if (ok)
+        siftAnalyser->setDistance(distance);
+    if (blocks)
+    {
+        if (this->SIFTBlockNumHEdit->text().isEmpty())
+            this->SIFTBlockNumHEdit->setText(QString::number(1));
+        if (this->SIFTBlockNumWEdit->text().isEmpty())
+            this->SIFTBlockNumWEdit->setText(QString::number(1));
+
+        blockNumH = this->SIFTBlockNumHEdit->text().toInt(&ok);
+        if (ok)
+            siftAnalyser->setBlockNumH(blockNumH);
+
+        blockNumW = this->SIFTBlockNumWEdit->text().toInt(&ok);
+        if (ok)
+            siftAnalyser->setBlockNumW(blockNumW);
+    }
+    siftAnalyser->setNewDirectory(this->SIFTNewDictionaryCheckBox->isChecked());
+}

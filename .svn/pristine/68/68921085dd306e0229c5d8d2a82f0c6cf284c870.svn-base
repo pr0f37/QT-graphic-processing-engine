@@ -1,0 +1,48 @@
+#ifndef SIFTANALYSER_H
+#define SIFTANALYSER_H
+#include "analyser.h"
+#include "logger.h"
+#include "siftdescriptor.h"
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <highgui.h>
+#include <stdio.h>
+#include <QMessageBox>
+#include <QLinkedList>
+#include <QMutableLinkedListIterator>
+
+class SiftAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+    QLinkedList<SiftDescriptor*> _siftDescriptors;
+    QLinkedList<SiftDescriptor*> _siftDictionary;
+    SiftAnalyser(const QString &, const QString &);
+    void fillImageSiftDescriptorsList();
+    double siftEuclideanDistance(const SiftDescriptor& , const SiftDescriptor &);
+    void drawInitialDictionaryWords(int);
+    void kMeans(const QLinkedList<SiftDescriptor*>&, const QLinkedList<SiftDescriptor*>&);
+    void determineClosestImageClass(QLinkedList<SiftDescriptor *> &, QLinkedList<SiftDescriptor *> &);
+    bool findNewMeans(QLinkedList<SiftDescriptor *> &, QLinkedList<SiftDescriptor *> &);
+    SiftDescriptor * findClassMean(QLinkedList<SiftDescriptor *> &, int);
+
+
+    void updateConfigFile();
+    void analyseImage(const QImage&, const QString&);
+    void analyseImage(QImage *);
+    void createDictionary(QImage *);
+    void convolveFilter(QImage *, int *w, int wX, int wY);
+    void bw(QImage *);
+    void imageSum(QImage *, QImage *);
+    void imageDiff(QImage *, QImage *);
+    void gradient(QImage *, int);
+    void mygradient(QImage *, int);
+    void threesholdFilter(QImage *, int);
+private:
+    static const int _numberOfDesc = 128;
+    static const int _maxSiftDescValue = 255;
+    static const double _maxDoubleValue = 1.7976931348623158e+308;
+};
+
+#endif // SIFTANALYSER_H

@@ -1,0 +1,31 @@
+#ifndef BTHAREAANALYSER_H
+#define BTHAREAANALYSER_H
+
+#include "bthanalyser.h"
+
+class BthAreaAnalyser : public BthAnalyser
+{
+    Q_OBJECT
+public:
+    BthAreaAnalyser(const QString&, const QString&, const int, const int, const int ,const int);
+    BthAreaAnalyser(const QString&, const QString&);
+    void analyseImage(const QImage&);
+    void setArea(const int, const int, const int ,const int);
+    uint distance(const QSqlRecord&);
+    uint min(const uint *);
+signals:
+
+public slots:
+    void receiveFileName(const QString);
+    void receiveAreaPosX(const int);
+    void receiveAreaPosY(const int);
+    void receiveAreaH(const int);
+    void receiveAreaW(const int);
+private:
+    int _areaWidth;
+    int _areaHeight;
+    int _areaPosX;
+    int _areaPosY;
+};
+
+#endif // BTHAREAANALYSER_H

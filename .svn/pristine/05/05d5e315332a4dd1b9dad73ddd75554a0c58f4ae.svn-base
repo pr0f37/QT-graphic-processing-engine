@@ -1,0 +1,82 @@
+#include "lssanalyser.h"
+
+
+LssAnalyser::LssAnalyser(const QString &fileName, const QString &imageTableName):
+    Analyser(fileName, imageTableName)
+{
+
+}
+
+void LssAnalyser::analyseImage(const QImage &image, const QString &imageName)
+{
+
+}
+
+/* Aquiring an ensemble of LSS descriptors of single image */
+LssImage LssAnalyser::analyseImage(const QString &imageName)
+{
+    QString logFileName = imageName;
+    //logFileName.chop(4);
+    //logFileName = logFileName.remove(0, 40);
+    //Logger * log = new Logger(logFileName + "LSS.txt");
+    Mat img = imread(imageName.toStdString());
+    if(!img.empty())
+    {
+        vector<float>* descriptors  = new vector<float>();
+        vector<Point>* locations = new vector<Point>();
+        Size winStride;
+        SelfSimDescriptor *desc = new SelfSimDescriptor();
+        desc->compute(img,*descriptors,winStride,*locations);
+        //log->log("*descriptors: " + QString::number(descriptors->size()));
+        //log->log("*descriptors/80: " + QString::number(descriptors->size()/80));
+        //log->log("*descriptors/80: " + QString::number((descriptors->size()/80)*80));
+        //int i = 0;
+        //for (vector<float>::iterator it = descriptors->begin()  ; it != descriptors->end(); ++it, i++)
+            //log->logSimple(QString::number(*it) + ((i % 80 == 0)?"\n":" "));
+
+
+
+    }
+}
+
+void LssAnalyser::getBthHistogram(const LssImage &image)
+{
+
+    // przegladamy po kolei wszystkie deskryptory obrazka
+        // dla kazdego deskryptora obrazka
+        // wyznaczamy najblizszy deskryptor ze slownika
+            // wyznaczamy odleglosc od kazdego ze slow ze slownika, wybieramy klase ze slownika o najmniejszej odleglosci
+        // zwiekszamy licznik w tablicy histogramu pod indeksem rownym numerowi klasy w slowniku
+    // robimy histogram deskryptorow ze slownika dla obrazka
+    // robimy z histogramu histogram bth
+
+}
+
+double siftEuclideanDistance(const LssDescriptor& fDescr, const LssDescriptor& sDesc)
+{
+    return 1.0;
+}
+
+void LssAnalyser::createDictionary()
+{
+    this->_dictionary.clear();
+    uint seed = (uint)QDateTime::currentDateTime().toTime_t();
+    qsrand(seed);
+    for (int i = 0; i < this->_dictWordsNum; i++)
+    {
+        QLinkedList<float> * vect = new QLinkedList<float>();
+        for (int j = 0; j < LssAnalyser::_descSize; j++)
+            vect->push_back((float)(qrand() % (LssAnalyser::_maxLssDescVal + 1))/(float)LssAnalyser::_maxLssDescVal);
+        this->_dictionary.insert(i, vect);
+    }
+}
+
+void LssAnalyser::updateDictionary()
+{
+
+}
+
+void LssAnalyser::setDictWordsNum(short num)
+{
+    this->_dictWordsNum = num;
+}

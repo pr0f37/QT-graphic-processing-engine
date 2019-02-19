@@ -1,0 +1,40 @@
+#include "siftdescriptor.h"
+
+SiftDescriptor::SiftDescriptor()
+{
+    _class = 0;
+}
+
+SiftDescriptor::SiftDescriptor(const QString &name, double *descriptor, int cls , double x , double y , double a , double b , double c , double scl , double ori )
+{
+    _class = cls;
+    _name = name;
+    _descriptor = descriptor;
+    _x = x;
+    _y = y;
+    _a = a;
+    _b = b;
+    _c = c;
+    _scl = scl;
+    _ori = ori;
+
+}
+
+QString SiftDescriptor::toString()
+{
+    QString returnedString = "";
+    returnedString += "<class>" + QString::number(_class) + "</class>\n";
+    returnedString += "<name>" + _name + "</name>\n";
+    returnedString += "<x>" + QString::number(_x) + "</x>\n";
+    returnedString += "<y>" + QString::number(_y) + "</y>\n";
+    returnedString += "<a>" + QString::number(_a) + "</a>\n";
+    returnedString += "<b>" + QString::number(_b) + "</b>\n";
+    returnedString += "<c>" + QString::number(_c) + "</c>\n";
+    returnedString += "<scl>" + QString::number(_scl) + "</scl>\n";
+    returnedString += "<ori>" + QString::number(_ori) + "</ori>\n";
+    returnedString += "<_decriptor>";
+    for (int i = 0; i < _numberOfDesc; i++)
+        returnedString += QString::number( *(_descriptor + i)) + ";";
+    returnedString += "</_decriptor>\n";
+    return returnedString;
+}

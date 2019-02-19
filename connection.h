@@ -1,0 +1,103 @@
+#ifndef CONNECTION_H
+#define CONNECTION_H
+
+#include <QMessageBox>
+#include <QtSql/qsql.h>
+#include <QtSql/qsqldatabase.h>
+#include <QtSql/qsqlerror.h>
+#include <QtSql/qsqlquery.h>
+#include "logger.h"
+#include <QFile>
+#include <QTextStream>
+#include <QStringList>
+
+static QStringList * getImageList(const QString &fileName)
+{
+    QStringList *imageList = new QStringList();
+
+    QFile *f = new QFile(fileName);
+    if (!f->open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(qApp->tr("Nie udalo sie otwozyc pliku images.txt"));
+        msgBox.exec();
+    }
+    else
+    {
+        QTextStream in(f);
+        while (!in.atEnd())
+        {
+            QString cmp = in.readLine();
+            cmp = cmp.simplified();
+            imageList->append(cmp.split(", ", QString::SkipEmptyParts));
+        }
+    }
+    return imageList;
+}
+
+static QStringList * getClassList(const QString &fileName)
+{
+    QStringList *classesList = new QStringList();
+
+    QFile *f = new QFile(fileName);
+    if (!f->open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(qApp->tr("Nie udalo sie otwozyc pliku classes.txt"));
+        msgBox.exec();
+    }
+    else
+    {
+        QTextStream in(f);
+        while (!in.atEnd())
+        {
+            QString cmp = in.readLine();
+            cmp = cmp.simplified();
+            classesList->append(cmp.split(", ", QString::SkipEmptyParts));
+        }
+    }
+    return classesList;
+}
+
+static bool createConnection()
+{
+    QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE");
+    db.setHostName("localhost");
+    db.setDatabaseName(":memory:");
+
+    if (!db.open()) {
+        QMessageBox::critical(0, qApp->tr("Cannot open database"),
+            qApp->tr("Unable to establish a database connection.\n"
+                     "This example needs SQLite support. Please read "
+                     "the Qt SQL driver documentation for information how "
+                     "to build it.\n\n"
+                     "Click Cancel to exit."), QMessageBox::Cancel);
+        return false;
+    }
+
+    QSqlQuery query;
+    QString queryValue;
+    Logger *logger = new Logger("connection_log.txt");
+    QStringList *imageList = getImageList("images.txt");
+    QStringList *classList = getClassList("classes.txt");
+    query.exec("create table images (id int primary key, file varchar(20), cls int, bst_key varchar(20), bk_first varchar(20), bk_second varchar(20), bk_third varchar(20), bk_fourth varchar(20),   bth1 varchar(29), bth2 varchar(29), bth3 varchar(29), bth4 varchar(29), bth5 varchar(29), bth6 varchar(29), bth7 varchar(29), bth8 varchar(29), bth9 varchar(29), bth10 varchar(29), bth11 varchar(29), bth12 varchar(29), bth13 varchar(29), bth14 varchar(29), bth15 varchar(29), bth16 varchar(29), bth17 varchar(29), bth18 varchar(29), bth19 varchar(29), bth20 varchar(29), bth21 varchar(29), bth22 varchar(29), bth23 varchar(29), bth24 varchar(29), bth25 varchar(29), bth26 varchar(29), bth27 varchar(29), bth28 varchar(29), bth29 varchar(29), bth30 varchar(29), bth31 varchar(29), bth32 varchar(29), bth33 varchar(29), bth34 varchar(29), bth35 varchar(29), bth36 varchar(29), bth37 varchar(29), bth38 varchar(29), bth39 varchar(29), bth40 varchar(29))");
+    for (int i = 0; i < imageList->count(); i++)
+    {
+        queryValue = "insert into images values(" + QString::number(i);
+        queryValue +=  ", 'images/" + imageList->at(i) + "'";
+        queryValue +=  ", " + classList->at(i);
+        queryValue += " , ";
+        for (int i = 0; i < 44; i++)
+            queryValue += "'0', ";
+        queryValue += "'0')";
+        query.exec(queryValue);
+        logger->log(queryValue);
+    }
+    query.exec("create index file_index on images (file)");
+    query.exec("create index bst_key_index on images (bst_key)");
+    return true;
+}
+
+
+
+#endif // CONNECTION_H

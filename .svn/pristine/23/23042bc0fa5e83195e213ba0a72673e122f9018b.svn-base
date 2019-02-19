@@ -1,0 +1,37 @@
+#ifndef LSSANALYSER_H
+#define LSSANALYSER_H
+#include "analyser.h"
+#include "logger.h"
+#include "cxcore.h"
+#include "cv.h"
+#include "cvaux.h"
+#include "highgui.h"
+#include "ml.h"
+#include "lssimage.h"
+using namespace cv;
+class LssAnalyser : public Analyser
+{
+    Q_OBJECT
+public:
+    QMap<int, QLinkedList<float> *> _dictionary;
+    QLinkedList<LssImage *> _images;
+    short _dictWordsNum;
+    static const int _descSize = 80;
+    static const int _maxLssDescVal = 1000000;
+    LssAnalyser(const QString &, const QString &);
+    void analyseImage(const QImage &, const QString &);
+    LssImage analyseImage(const QString &);
+    void getBthHistogram(const LssImage &);
+    double siftEuclideanDistance(const LssDescriptor&, const LssDescriptor&);
+
+    void createDictionary();
+    void updateDictionary();
+
+    void setDictWordsNum(short);
+signals:
+    
+public slots:
+
+};
+
+#endif // LSSANALYSER_H

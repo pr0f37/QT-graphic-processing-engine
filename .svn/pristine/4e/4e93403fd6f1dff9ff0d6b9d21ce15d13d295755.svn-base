@@ -1,0 +1,55 @@
+#-------------------------------------------------
+#
+# Project created by QtCreator 2010-08-02T12:52:16
+#
+#-------------------------------------------------
+
+QT       += core gui sql
+
+TARGET = SQL
+TEMPLATE = app
+
+
+SOURCES += main.cpp\
+        mainwindow.cpp \
+    infowindow.cpp \
+    view.cpp \
+    imageitem.cpp \
+    imageanalyser.cpp \
+    bthanalyser.cpp \
+    analyser.cpp \
+    bthareaanalyser.cpp \
+    logger.cpp \
+    siftanalyser.cpp
+
+HEADERS  += mainwindow.h \
+    connection.h \
+    infowindow.h \
+    view.h \
+    imageitem.h \
+    imageanalyser.h \
+    bthanalyser.h \
+    analyser.h \
+    bthareaanalyser.h \
+    logger.h \
+    siftanalyser.h
+
+FORMS    += mainwindow.ui
+
+RESOURCES += \
+    SQL.qrc
+
+INCLUDEPATH += C:/opencv/include/opencv \
+   C:/opencv/include/opencv2 \
+   C:/opencv/modules/core/include \
+   C:/opencv/modules/imgproc/include \
+   C:/opencv/modules/video/include \
+   C:/opencv/modules/features2d/include \
+   C:/opencv/modules/flann/include \
+   C:/opencv/modules/calib3d/include \
+   C:/opencv/modules/objdetect/include \
+   C:/opencv/modules/legacy/include \
+    SIFT/
+
+
+LIBS += -L C:/opencv/build/

@@ -1,0 +1,13 @@
+#include "lssanalyser.h"
+
+
+LssAnalyser::LssAnalyser(const QString &fileName, const QString &imageTableName):Analyser(fileName, imageTableName)
+{
+    cv::Mat img = cv::imread("D:\\QTprojects\\SQL-build-desktop\\images\\penguins.png");
+    QImage image("D:\\QTprojects\\SQL-build-desktop\\images\\penguins.png");
+    cv::Point point(image.width(), image.height());
+    LSS lss(point, img);
+
+    cv::Mat descriptor = lss();
+
+}

@@ -1,0 +1,80 @@
+#-------------------------------------------------
+#
+# Project created by QtCreator 2010-08-02T12:52:16
+#
+#-------------------------------------------------
+
+QT       += core gui sql
+
+TARGET = SQL
+TEMPLATE = app
+
+
+SOURCES += main.cpp\
+       mainwindow.cpp \
+    infowindow.cpp \
+    view.cpp \
+    imageitem.cpp \
+    imageanalyser.cpp \
+    bthanalyser.cpp \
+    analyser.cpp \
+    bthareaanalyser.cpp \
+    logger.cpp \
+    siftanalyser.cpp \
+    SIFT/xform.c \
+    SIFT/utils.c \
+    SIFT/sift.c \
+    SIFT/minpq.c \
+    SIFT/kdtree.c \
+    SIFT/imgfeatures.c
+
+HEADERS  += mainwindow.h \
+    connection.h \
+    infowindow.h \
+    view.h \
+    imageitem.h \
+    imageanalyser.h \
+    bthanalyser.h \
+    analyser.h \
+    bthareaanalyser.h \
+    logger.h \
+    siftanalyser.h \
+    SIFT/xform.h \
+    SIFT/utils.h \
+    SIFT/sift.h \
+    SIFT/minpq.h \
+    SIFT/kdtree.h \
+    SIFT/imgfeatures.h
+
+FORMS    += mainwindow.ui
+
+RESOURCES += \
+    SQL.qrc
+
+INCLUDEPATH += C:/opencv/include/opencv \
+   C:/opencv/include/opencv2 \
+   C:/opencv/build/include/opencv2 \
+   C:/opencv/build/include/opencv \
+   C:/opencv/modules/core/include \
+   C:/opencv/modules/imgproc/include \
+   C:/opencv/modules/video/include \
+   C:/opencv/modules/features2d/include \
+   C:/opencv/modules/flann/include \
+   C:/opencv/modules/calib3d/include \
+   C:/opencv/modules/objdetect/include \
+   C:/opencv/modules/legacy/include \
+   C:/opencv/modules/highgui/include \
+    SIFT/
+
+
+LIBS += C:/opencv/build/x86/mingw/lib/libopencv_highgui242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_core242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_imgproc242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_video242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_features2d242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_flann242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_calib3d242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_legacy242.dll.a \
+     C:/opencv/build/x86/mingw/lib/libopencv_objdetect242.dll.a\
+     D:/QTprojects/SQL/libsift.a
+

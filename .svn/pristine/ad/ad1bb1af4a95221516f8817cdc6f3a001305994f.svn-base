@@ -1,0 +1,308 @@
+#include "lssanalyser.h"
+
+
+LssAnalyser::LssAnalyser(const QString &fileName, const QString &imageTableName):
+    Analyser(fileName, imageTableName)
+{
+    this->_dictWordsNum = 200;
+    this->_thresholdValue = 0.5;
+}
+
+void LssAnalyser::analyseImage(const QImage &image, const QString &imageName)
+{
+
+}
+
+/* Aquiring an ensemble of LSS descriptors of single image */
+LssImage LssAnalyser::analyseImage(const QString &imageName)
+{
+    //QString logFileName = imageName;
+    //logFileName.chop(4);
+    //logFileName = logFileName.remove(0, 40);
+    //Logger * log = new Logger(logFileName + "LSS.txt");
+    Mat img = imread(imageName.toStdString());
+    LssImage * lssImg;
+    if(!img.empty())
+    {
+        vector<float>* descriptors  = new vector<float>();
+        vector<Point>* locations = new vector<Point>();
+        Size winStride;
+        SelfSimDescriptor *desc = new SelfSimDescriptor();
+        desc->compute(img,*descriptors,winStride,*locations);
+        //log->log("*descriptors: " + QString::number(descriptors->size()));
+        //log->log("*descriptors/80: " + QString::number(descriptors->size()/80));
+        //log->log("*descriptors/80: " + QString::number((descriptors->size()/80)*80));
+        //int i = 0;
+        //for (vector<float>::iterator it = descriptors->begin()  ; it != descriptors->end(); ++it, i++)
+            //log->logSimple(QString::number(*it) + ((i % 80 == 0)?"\n":" "));
+        lssImg = new LssImage(new QString(imageName), descriptors);
+        this->getBthHistogram(*lssImg);
+
+
+    }
+    return lssImg;
+}
+
+void LssAnalyser::getBthHistogram(LssImage &image)
+{
+    int * hist = new int[this->_dictWordsNum];
+    for (int i = 0; i < this->_dictWordsNum; i++)
+        *(hist+i) = 0;
+    QMutableLinkedListIterator<LssDescriptor* > it(*(image._descriptors));
+    while(it.hasNext())
+        *(hist+this->getDescClosestClass(it.next())) += 1;
+    for (int i = 0; i < this->_dictWordsNum; i++)
+        if( (((double)*(hist+i))/(double)(image._descriptors->size()))*100 >= this->_thresholdValue)
+            *(hist+i) = 1;
+        else
+            *(hist+i) = 0;
+    image._bthHistogram = hist;
+}
+
+int LssAnalyser::getDescClosestClass(const LssDescriptor & desc)
+{
+    QMutableLinkedListIterator<LssDescriptor* > it(this->_dictionary);
+    double dist = numeric_limits<double>::max();
+    int cls = 0;
+    int i = 0;
+    LssDescriptor * tmpDesc, closestDesc;
+    while(it.hasNext())
+    {
+        tmpDesc = it.next();
+        double d = lssEuclideanDistance(desc, tmpDesc);
+        if (dist > d)
+        {
+            dist = d;
+            cls = i;
+            closestDesc = tmpDesc;
+        }
+        i++;
+    }
+    if (!this->_lssContainers.contains(cls))
+        this->_lssContainers.insert(cls, new LssClassContainer(cls));
+    LssDescriptor * descCopy = new LssDescriptor(desc);
+    this->_lssContainers[cls]->addClassToContainer(*descCopy);
+    return cls;
+}
+
+double LssAnalyser::lssEuclideanDistance(const LssDescriptor& fDescr, const LssDescriptor& sDescr)
+{
+    double distance = 0.0;
+    QLinkedListIterator<float> fIt(*(fDescr._descriptor));
+    QLinkedListIterator<float> sIt(*(sDescr._descriptor));
+    while(fIt.hasNext() && sIt.hasNext())
+    {
+        double di = fIt.next() - sIt.next();
+        distance += di*di;
+    }
+    distance = sqrt(distance);
+    return distance;
+}
+
+/* Create directory using randomly generated descriptors */
+void LssAnalyser::createDictionary()
+{
+    this->_dictionary.clear();
+    uint seed = (uint)QDateTime::currentDateTime().toTime_t();
+    qsrand(seed);
+    for (int i = 0; i < this->_dictWordsNum; i++)
+    {
+        QLinkedList<float> * vect = new QLinkedList<float>();
+        for (int j = 0; j < LssDescriptor::_descSize; j++)
+            vect->push_back((float)(qrand() % (LssDescriptor::_maxLssDescVal + 1))/(float)LssDescriptor::_maxLssDescVal);
+        this->_dictionary.push_back(new LssDescriptor(vect));
+    }
+
+}
+
+/* Used to create dictionary out of the most frequent descriptors in database,
+   then use kMeans algorithm to get better representatives */
+void LssAnalyser::updateDictionary()
+{
+    this->_dictionary.clear();
+    uint seed = (uint)QDateTime::currentDateTime().toTime_t();
+    qsrand(seed);
+    QMutableMapIterator<int, LssClassContainer *> ci(this->_lssContainers);
+    double powerSum = 0;
+    while (ci.hasNext())
+    {
+        LssClassContainer * container = ci.next().value();
+        powerSum += container->_power;
+    }
+    ci.toFront();
+    while (ci.hasNext())
+    {
+        LssClassContainer * container = ci.next().value();
+        for (int i = 0; i < qRound((double)this->_dictWordsNum * (container->_power / powerSum)); i++)
+        {
+            int randValue = 0;
+            do
+                randValue =  qrand() % container->_power;
+            while(!container->_descriptors.contains(randValue));
+            LssDescriptor * newDictClass = new LssDescriptor(*(container->_descriptors.take(randValue))); // wyci¹gam z kontenera wylosowan¹ wartoœæ i jej KOPIE umieszczam w s³owniku
+            this->_dictionary << newDictClass;
+        }
+    }
+    this->kMeans();
+    QMutableLinkedListIterator<LssImage*> iIt(this->_images);
+    while(iIt.hasNext())
+        this->getBthHistogram(*(iIt.next()));
+}
+
+void LssAnalyser::kMeans()
+{
+    int i = 0;
+    bool meanChanged = true;
+    while (meanChanged == true && i++ < 50)
+    {
+        this->_lssContainers.clear();
+        QMutableLinkedListIterator<LssImage *> iIt(this->_images);
+        while(iIt.hasNext())
+        {
+            LssImage * img = iIt.next();
+            QMutableLinkedListIterator<LssDescriptor *> dIt(*(img->_descriptors));
+            while(dIt.hasNext())             
+                this->getDescClosestClass(dIt.next());
+        }
+        meanChanged = findNewMeans();
+    }
+}
+
+bool LssAnalyser::findNewMeans()
+{
+    bool meanChanged = false;
+    QMutableLinkedListIterator<LssDescriptor *> dIt(this->_dictionary);
+    int cls = 0;
+    while (dIt.hasNext())
+    {
+        LssDescriptor * dict = dIt.next();
+        if (this->_lssContainers.contains(cls))
+        {
+            QList<LssDescriptor *> descList = this->_lssContainers[cls]->_descriptors.values();
+            LssDescriptor * newMean = this->findClassMean(descList, cls);
+            if (newMean != 0)
+            {
+                double dist = this->lssEuclideanDistance(*dict, *newMean);
+                if (dist != 0)
+                {
+                    meanChanged = true;
+                    dict->_descriptor = newMean->_descriptor;
+                }
+            }
+        }
+        cls++;
+    }
+    return meanChanged;
+}
+
+LssDescriptor * LssAnalyser::findClassMean(QList<LssDescriptor *> &examples, int cls)
+{
+    int clsReps = 0;
+    QMutableListIterator<LssDescriptor *> eIt(examples);
+    QLinkedList<float> * descriptor = new QLinkedList<float>();
+    for (int i = 0; i < LssDescriptor::_descSize; i++)
+         descriptor->push_back(0.0f);
+    while (eIt.hasNext())
+    {
+        LssDescriptor * example = eIt.next();
+        clsReps++;
+        QMutableLinkedListIterator<float> dIt(*descriptor);
+        QLinkedListIterator<float> exIt(*(example->_descriptor));
+        while(dIt.hasNext() && exIt.hasNext())
+            dIt.next() += exIt.next();
+    }
+    if (clsReps != 0)
+    {
+        QMutableLinkedListIterator<float> dIt(*descriptor);
+        while(dIt.hasNext())
+            dIt.next() /= clsReps;
+        LssDescriptor * newMeanDesc = new LssDescriptor(descriptor);
+        return newMeanDesc;
+    }
+    return 0;
+}
+
+QString LssAnalyser::findClosestImages(LssImage &imageAnalysed, uint imageNumber)
+{
+    imageAnalysed._distances.clear();
+    QSqlQuery query;
+    QStringList * closestImages = new QStringList();
+    QMutableLinkedListIterator<LssImage *> imagesIt(this->_images);
+    while(imagesIt.hasNext())
+    {
+        LssImage * image = imagesIt.next();
+        this->countDistances(imageAnalysed, *image);
+    }
+    QMutableMapIterator<uint, int> distIt(imageAnalysed._distances);
+    while(distIt.hasNext())
+    {
+        QMap<uint, int>::iterator it = distIt.next();
+        uint key = it.key();
+        if (key > imageNumber)
+            break;
+        int id = it.value();
+        closestImages->append(QString::number(id));
+        QString queryContent = "update images set bst_key ='" + QString::number(key)
+                + "' where id = " + QString::number(id) + "";
+        query.exec(queryContent);
+    }
+    return closestImages->join(",");
+}
+
+void LssAnalyser::countDistances(LssImage &imageAnalysed, LssImage &image)
+{
+    uint  dist = 0;
+    dist += *(distance(imageAnalysed._bthHistogram, image._bthHistogram));
+    imageAnalysed._distances.insertMulti(dist, image._id); // TODO: zadbaæ o ID dla obrazu!!!!
+
+}
+
+uint * LssAnalyser::distance(int * image1Bth, int * image2Bth)
+{
+    uint * dist = new uint;
+
+    *(dist) = 0;
+    for (int i = 0; i < this->_dictWordsNum; i++)
+        *(dist) += (*(image1Bth+i) ^ *(image2Bth+i));
+
+    return dist;
+}
+
+void LssAnalyser::fillImageLssDescriptorsList()
+{
+    this->_images.clear();
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel(this);
+    imageTable->setTable(this->_imageTableName);
+    imageTable->select(); // reads image table from database
+    int imageCount = imageTable->rowCount();
+    for (int i = 0; i <imageCount && i < 3; i++)
+    {
+        QSqlRecord record = imageTable->record(i); // reads one record from image table
+        QString fileQString = record.value("file").toString();
+        int fileId = record.value("id").toInt();
+
+        Mat img = imread(fileQString.toStdString());
+        LssImage * lssImg;
+        if(!img.empty())
+        {
+            vector<float>* descriptors  = new vector<float>();
+            vector<Point>* locations = new vector<Point>();
+            Size winStride;
+            SelfSimDescriptor *desc = new SelfSimDescriptor();
+            desc->compute(img,*descriptors,winStride,*locations);
+            lssImg = new LssImage(0, fileId, new QString(fileQString), descriptors);
+            this->getBthHistogram(*lssImg);
+            this->_images << lssImg;
+        }
+    }
+}
+
+void LssAnalyser::setDictWordsNum(short num)
+{
+    this->_dictWordsNum = num;
+}
+
+void LssAnalyser::setThresholdValue(double val)
+{
+    this->_thresholdValue = val;
+}

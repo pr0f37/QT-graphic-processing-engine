@@ -1,0 +1,337 @@
+#include "bthanalyser.h"
+
+BthAnalyser::BthAnalyser(const QString &fileName, const QString &imageTableName)
+    :Analyser(fileName, imageTableName)
+{
+    _threshold = 4;
+    _widthBlocks = 8;
+    _heightBlocks = 5;
+    _distThreshold = 500;
+}
+
+void BthAnalyser::updateConfigFile(const QString &fileName, QSqlRelationalTableModel& imageTable)
+{
+    QFile * file = new QFile(fileName);
+    if(!file->open(QIODevice::WriteOnly | QIODevice::Text)) // if file couldn't be opened
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Could not save BTH on disk"));
+       msgBox.exec();
+    }
+    else
+    {
+       imageTable.select(); // reads image table from database
+       int imageCount = imageTable.rowCount();
+       QTextStream out(file);
+       for (int i = 0; i <imageCount; i++)
+       {
+           QSqlRecord record = imageTable.record(i); // reads one record from image table
+           QString id = record.value("id").toString();
+
+           out << id << ":";
+           for (int i = 0; i < 39; i++)
+           {
+               QString bthPart = record.value("bth" + QString::number(i + 1)).toString();
+               out << bthPart << ",";
+           }
+           out << record.value("bth40").toString() << "\n";
+       }
+    }
+    file->close();
+}
+
+void BthAnalyser::BTHInitialize()
+{
+    QString message = "Przeprocesowano";
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel(this);
+
+    imageTable->setTable(_imageTableName);
+    imageTable->select(); // reads image table from database
+    int imageCount = imageTable->rowCount();
+    for (int i = 0; i <imageCount; i++)
+    {
+        QSqlRecord record = imageTable->record(i); // reads one record from image table
+        QString file = record.value("file").toString();
+        QImage *image = new QImage(file); // opens image read from database
+        analyseImage(*image);
+        updateDatabase(file);
+        delete image;
+    }
+    updateConfigFile("BTHconfig.txt", *imageTable);
+
+    QMessageBox msgBox;
+    msgBox.setText(message);
+    msgBox.exec();
+}
+
+void BthAnalyser::analyseImage(const QImage& image)
+{
+    int windowWidth = image.width() / _widthBlocks;
+    int windowHeight = image.height() / _heightBlocks;
+    for (int i = 0; i < 40; i++)
+    {
+        _subblocks[i] = 0;
+    }
+    QFile *file = new QFile("BTHFunc_TESTS");
+    if(!file->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna zapisac na dysku!"));
+       msgBox.exec();
+    }
+    else
+    {
+        QTextStream out(file);
+
+        for (int i = 0; i < _widthBlocks * _heightBlocks ; i++)
+        {
+            qint64 BTHistogram[29];
+            for (int j = 0; j < 29; j++)        {
+                BTHistogram[j] = 0;
+            }
+            out << "BLOCK" << i << ":\n";
+            for (int x = 0 + (i % _widthBlocks) * windowWidth ; x < windowWidth + (i % _widthBlocks) * windowWidth; x++)
+            {
+                for (int y = 0 + (i / _widthBlocks)* windowHeight; y < windowHeight + (i / _widthBlocks) * windowHeight; y++)
+                {
+                    QColor colorValue =(QColor) image.pixel(x,y);
+                    int h = 0;
+                    int s = 0;
+                    int v = 0;
+                    colorValue.getHsv(&h,&s,&v);
+                    classifyColor(BTHistogram, h, s, v);
+                    out << "(" << x << ", " << y << ") ";
+                }
+                out << "\n";
+            }
+            _subblocks[i] = binarize(BTHistogram[0], windowWidth, windowHeight);
+        }
+    }
+    file->close();
+}
+
+uint BthAnalyser::binarize(qint64 &histogram, const int &width, const int &height)
+{
+    qint64 * i = &histogram;
+    int count  = 0;
+    uint BTH = 0;
+    while (count < 29)
+    {
+        *i = (qint64)(((double)(*i) / (double)(width * height)) * (double)100);
+
+        if (*i >= _threshold)
+        {
+            *i = 1;
+            BTH += 1 << (count + 1);
+        }
+        else *i = 0;
+        i++;
+        count++;
+    }
+    return BTH;
+}
+
+void BthAnalyser::updateDatabase(const QString& file)
+{
+    QSqlQuery query;
+    for (int i = 0; i < 40; i++)
+    {
+        QString BTHstring = QString::number(_subblocks[i], 2);
+        while (BTHstring.length() < 29)
+        {
+            BTHstring.prepend("0");
+        }
+        QString queryContent = "update images set bth";
+        queryContent += QString::number(i+1);
+        queryContent += "='" + BTHstring + "' where file='" + file + "'";
+        query.exec(queryContent);
+    }
+
+}
+
+uint BthAnalyser::distance(const QSqlRecord &image1)
+{
+    uint dist = 0;
+    for (int i = 0; i < 40; i++)
+    {
+        QString analysedImage = QString::number(_subblocks[i], 2);
+        while (analysedImage.length() < 29)
+        {
+            analysedImage.prepend("0");
+        }
+        QString subblock = "bth" + QString::number(i + 1);
+        dist += partialDistance(image1.value(subblock).toString(), analysedImage);
+    }
+    return dist;
+}
+
+uint BthAnalyser::partialDistance(const QString &image1Subblock, const QString & image2Subblock)
+{
+    uint partDist = 0;
+    for (int i = 0; i < 29; i++)
+    {
+        partDist += (image1Subblock.at(i).digitValue() ^ image2Subblock.at(i).digitValue());
+    }
+    return partDist;
+}
+
+void BthAnalyser::BTHLoad()
+{
+    QSqlQuery query;
+    QFile * file = new QFile("BTHconfig.txt");
+    if(!file->open(QIODevice::ReadOnly | QIODevice::Text))
+    {
+        QMessageBox msgBox;
+        msgBox.setText(tr("Nie mozna odczytac pliku konfiguracyjnego"));
+        msgBox.exec();
+    }
+    else
+    {
+        QTextStream in(file);
+        while (!in.atEnd())
+        {
+            QString cmp = in.readLine();
+            cmp = cmp.trimmed();
+            QStringList mainParts = cmp.split(":", QString::SkipEmptyParts);
+            QString id = mainParts[0];
+            QString bth = mainParts[1];
+            QStringList bthList = bth.split(",", QString::SkipEmptyParts);
+            for (int i = 0; i < 40; i++)
+            {
+                QString queryContent = "update images set bth";
+                queryContent += QString::number(i+1);
+                queryContent += "='" + bthList[i] + "' where id='" + id + "'";
+                query.exec(queryContent);
+            }
+
+        }
+    }
+}
+
+void BthAnalyser::receiveFileName(const QString fileName)
+{
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel();
+    QStringList *ids = new QStringList();
+    QImage *image = new QImage(fileName);
+    analyseImage(*image);
+
+    uint **distances = new uint *[2];
+    for (int i = 0; i < 2; i++)
+        distances[i] = new uint[IMAGES_AMOUNT];
+
+    for (int i = 0; i < 2; i++)
+        for (int j = 0; j < IMAGES_AMOUNT; j++)
+            distances[i][j] = 2147483647;
+    //QString id;
+
+
+    imageTable->setTable(_imageTableName);
+    imageTable->select(); // reads image table from database
+    int imageCount = imageTable->rowCount();
+    for (int i = 0; i <imageCount; i++)
+    {
+        QSqlRecord record = imageTable->record(i);
+        uint dist = distance(record);
+        if (dist < distances[0][IMAGES_AMOUNT - 1] && dist < _distThreshold)
+        {
+            distances[0][IMAGES_AMOUNT - 1] = dist;
+            distances[1][IMAGES_AMOUNT - 1] = record.value("id").toInt();
+            sort(distances);
+        }
+    }
+    for (int i = 0; i < IMAGES_AMOUNT; i++)
+    {
+        ids->append(QString::number(distances[1][i]));
+    }
+    QString id = ids->join(",");
+    emit sendBthIdValue(id);
+}
+
+void BthAnalyser::sort(uint **distances)
+{
+    for (int i = 0; i < IMAGES_AMOUNT; i++)
+    {
+        for (int j = i + 1; j < IMAGES_AMOUNT; j++)
+        {
+
+            if (distances[0][j] < distances[0][i])
+            {
+                uint tmp = distances[0][i];
+                distances[0][i] = distances[0][j];
+                distances[0][j] = tmp;
+
+                tmp = distances[1][i];
+                distances[1][i] = distances[1][j];
+                distances[1][j] = tmp;
+            }
+        }
+    }
+}
+
+void BthAnalyser::receiveThreesholdValue(const int newValue)
+{
+    _distThreshold = newValue;
+}
+
+void BthAnalyser::classifyColor(qint64 *BTHistogram, const int &h, const int &s, const int &v)
+{
+    if (v < 64)
+        BTHistogram[0]++; // black
+    else if (s < 51 && v > 191)
+        BTHistogram[1]++; // white
+    else if (s > 51 && v > 191 && h >= 25 && h < 48) // bright chromatic
+        BTHistogram[2]++;
+    else if (s > 51 && v > 191 && h >= 48 && h < 66)
+        BTHistogram[3]++;
+    else if (s > 51 && v > 191 && h >= 66 && h < 160)
+        BTHistogram[4]++;
+    else if (s > 51 && v > 191 && h >= 160 && h < 185)
+        BTHistogram[5]++;
+    else if (s > 51 && v > 191 && h >= 185 && h < 200)
+        BTHistogram[6]++;
+    else if (s > 51 && v > 191 && h >= 200 && h < 270)
+        BTHistogram[7]++;
+    else if (s > 51 && v > 191 && h >= 270 && h < 295)
+        BTHistogram[8]++;
+    else if (s > 51 && v > 191 && h >= 295 && h < 335)
+        BTHistogram[9]++;
+    else if (s > 51 && v > 191)
+        BTHistogram[10]++;
+    else if (h >= 25 && h < 48 && s < 153) // CHROMATIC
+        BTHistogram[11]++;
+    else if (h >= 48 && h < 66 && s < 153)
+        BTHistogram[12]++;
+    else if (h >= 66 && h < 160 && s < 153)
+        BTHistogram[13]++;
+    else if (h >= 160 && h < 185 && s < 153)
+        BTHistogram[14]++;
+    else if (h >= 185 && h < 200 && s < 153)
+        BTHistogram[15]++;
+    else if (h >= 200 && h < 270 && s < 153)
+        BTHistogram[16]++;
+    else if (h >= 270 && h < 295 && s < 153)
+        BTHistogram[17]++;
+    else if (h >= 295 && h < 335 && s < 153)
+        BTHistogram[18]++;
+    else if (s < 153)
+        BTHistogram[19]++;
+    else if (h >= 25 && h < 48 && s >= 153) // CHROMATIC
+        BTHistogram[20]++;
+    else if (h >= 48 && h < 66 && s >= 153)
+        BTHistogram[21]++;
+    else if (h >= 66 && h < 160 && s >= 153)
+        BTHistogram[22]++;
+    else if (h >= 160 && h < 185 && s >= 153)
+        BTHistogram[23]++;
+    else if (h >= 185 && h < 200 && s >= 153)
+        BTHistogram[24]++;
+    else if (h >= 200 && h < 270 && s >= 153)
+        BTHistogram[25]++;
+    else if (h >= 270 && h < 295 && s >= 153)
+        BTHistogram[26]++;
+    else if (h >= 295 && h < 335 && s >= 153)
+        BTHistogram[27]++;
+    else if (s >= 153)
+        BTHistogram[28]++;
+
+}

@@ -1,0 +1,97 @@
+#include "logger.h"
+
+Logger::Logger(const QString &logFileName)
+{
+    _logFile = new QFile("logs\\" + logFileName);
+    clearLogFile();
+}
+
+bool Logger::log(const QString &logValue)
+{
+    if(!_logFile->open(QIODevice::Append | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        QTextStream out(_logFile);
+        out << "[LOG TIME :" << (QDateTime::currentDateTime()).toString("hh:mm:ss") << "]: " << logValue << "\n";
+        _logFile->close();
+    }
+    return true;
+}
+
+bool Logger::logSimple(const QString &logValue)
+{
+    if(!_logFile->open(QIODevice::Append | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        QTextStream out(_logFile);
+        out << logValue ;
+        _logFile->close();
+    }
+    return true;
+}
+
+bool Logger::logSimple(QLinkedList<SiftDescriptor*>& list)
+{
+    if(!_logFile->open(QIODevice::Append | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        QTextStream out(_logFile);
+        QMutableLinkedListIterator<SiftDescriptor *> i(list);
+        while (i.hasNext())
+        {
+            SiftDescriptor * example = i.next();
+            out << example->_name << "," << QString::number(example->_class) << ",";
+            for (int i = 0; i < SiftDescriptor::_numberOfDesc; i++)
+                out << QString::number(*(example->_descriptor + i))<< ",";
+            out << "\n";
+        }
+        _logFile->close();
+    }
+    return true;
+}
+
+bool Logger::logSimple(QLinkedList<SiftImage*>& list)
+{
+    QMutableLinkedListIterator<SiftImage *> i(list);
+    bool isLogged = false;
+    while (i.hasNext())
+    {
+        SiftImage * example = i.next();
+        isLogged = logSimple(example->_featuresList);
+    }
+    return isLogged;
+}
+
+bool Logger::clearLogFile()
+{
+    if(!_logFile->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        _logFile->close();
+    }
+    return true;
+}

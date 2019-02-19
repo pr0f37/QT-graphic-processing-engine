@@ -1,0 +1,60 @@
+#include "logger.h"
+
+Logger::Logger(const QString &logFileName)
+{
+    _logFile = new QFile(logFileName);
+    clearLogFile();
+}
+
+bool Logger::log(const QString &logValue)
+{
+    if(!_logFile->open(QIODevice::Append | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        QTextStream out(_logFile);
+        out << "[LOG TIME :" << (QDateTime::currentDateTime()).toString("hh:mm:ss") << "]: " << logValue << "\n";
+        _logFile->close();
+    }
+    return true;
+}
+
+bool Logger::logPrimitive(const QString &logValue)
+{
+    if(!_logFile->open(QIODevice::Append | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        QTextStream out(_logFile);
+        out << logValue ;
+        _logFile->close();
+    }
+    return true;
+}
+
+
+bool Logger::clearLogFile()
+{
+    if(!_logFile->open(QIODevice::WriteOnly | QIODevice::Text))
+    {
+       QMessageBox msgBox;
+       msgBox.setText(tr("Nie mozna otworzyc pliku logowania!"));
+       msgBox.exec();
+       return false;
+    }
+    else
+    {
+        _logFile->close();
+    }
+    return true;
+}

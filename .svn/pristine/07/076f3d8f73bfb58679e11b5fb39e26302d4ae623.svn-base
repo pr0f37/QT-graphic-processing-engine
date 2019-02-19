@@ -1,0 +1,15 @@
+#ifndef LSSDESCRIPTOR_H
+#define LSSDESCRIPTOR_H
+#include <QLinkedList>
+
+class LssDescriptor
+{
+
+public:
+    LssDescriptor();
+    LssDescriptor(QLinkedList<float> *);
+    LssDescriptor(LssDescriptor *);
+    QLinkedList<float> * _descriptor;
+};
+
+#endif // LSSDESCRIPTOR_H

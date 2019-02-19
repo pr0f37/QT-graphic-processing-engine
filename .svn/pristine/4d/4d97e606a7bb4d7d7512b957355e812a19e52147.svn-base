@@ -1,0 +1,15 @@
+#include "lssdescriptor.h"
+
+LssDescriptor::LssDescriptor()
+{
+}
+
+LssDescriptor::LssDescriptor(float * descriptor)
+{
+    this->_descriptor = descriptor;
+}
+
+LssDescriptor::LssDescriptor(LssDescriptor * descriptor)
+{
+    this->_descriptor = descriptor->_descriptor;
+}

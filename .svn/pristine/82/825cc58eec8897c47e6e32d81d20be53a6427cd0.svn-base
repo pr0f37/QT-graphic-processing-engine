@@ -1,0 +1,23 @@
+#ifndef LOGGER_H
+#define LOGGER_H
+
+#include <QObject>
+#include <QFile>
+#include <QMessageBox>
+#include <QTextStream>
+#include <QTime>
+#include <QDateTime>
+
+class Logger : public QObject
+{
+    Q_OBJECT
+public:
+    explicit Logger(const QString&);
+    bool log(const QString&);
+    bool logPrimitive(const QString&);
+    bool clearLogFile();
+private:
+    QFile *_logFile;
+};
+
+#endif // LOGGER_H

@@ -1,0 +1,22 @@
+#ifndef LSSIMAGE_H
+#define LSSIMAGE_H
+#include <QString>
+#include <QLinkedList>
+#include <vector>
+#include "lssdescriptor.h"
+
+using namespace std;
+class LssImage
+{
+public:
+    LssImage();
+    LssImage(int, QString *, int *, QLinkedList<LssDescriptor*> *);
+    LssImage(QString *, vector<float> *);
+    LssImage(LssImage *);
+    int _class;
+    QString * _name;
+    int * _bthHistogram;
+    QLinkedList<LssDescriptor*> * _descriptors;
+};
+
+#endif // LSSIMAGE_H

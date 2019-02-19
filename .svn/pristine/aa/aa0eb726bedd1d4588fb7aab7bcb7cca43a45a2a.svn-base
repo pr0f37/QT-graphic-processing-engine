@@ -1,0 +1,18 @@
+#ifndef LSSDESCRIPTOR_H
+#define LSSDESCRIPTOR_H
+#include <QLinkedList>
+
+class LssDescriptor
+{
+
+public:
+    static const int _descSize = 80;
+    static const int _maxLssDescVal = 1000000;
+
+    LssDescriptor();
+    LssDescriptor(QLinkedList<float> *);
+    LssDescriptor(LssDescriptor *);
+    QLinkedList<float> * _descriptor;
+};
+
+#endif // LSSDESCRIPTOR_H

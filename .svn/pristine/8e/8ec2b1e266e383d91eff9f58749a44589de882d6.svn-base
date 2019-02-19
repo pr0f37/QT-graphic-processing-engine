@@ -1,0 +1,737 @@
+#include "siftanalyser.h"
+
+
+
+
+
+SiftAnalyser::SiftAnalyser(const QString &fileName, const QString &imageTableName):Analyser(fileName, imageTableName)
+{
+    _newDirectory = true;
+    _thresholdValue = 4;
+    _blockNumH = 1;
+    _blockNumW = 1;
+}
+
+void SiftAnalyser::analyseImage(const QImage &image, const QString &imageName)
+{
+
+}
+
+void SiftAnalyser::updateConfigFile()
+{
+
+}
+
+/* losowany slownik bez uzycia kmeans */
+void SiftAnalyser::analyseImage(QImage *image)
+{
+
+    Logger * log_i = new Logger("SIFT_BHT_Images.csv");
+    if(_siftImages.isEmpty())
+        this->fillImageSiftDescriptorsList();
+    if (_newDirectory || _siftDictionary.isEmpty())
+        this->drawInitialDictionaryWords(SiftAnalyser::_numberOfWords);
+    this->findImageClasses(_siftImages, _siftDictionary);
+    this->getImageSiftBth(_siftImages);
+    log_i->logSimple(_siftImages);
+}
+
+void SiftAnalyser::createDictionary(QImage *image)
+{
+    Logger * log_i = new Logger("SIFT_BHT_Images.csv");
+    if (_siftImages.isEmpty())
+        this->fillImageSiftDescriptorsList();
+    if (_newDirectory || _siftDictionary.isEmpty())
+        this->drawInitialDictionaryWords(SiftAnalyser::_numberOfWords);
+    this->kMeans(_siftImages, _siftDictionary);
+    this->findImageClasses(_siftImages, _siftDictionary);
+    this->getImageSiftBth(_siftImages);
+    log_i->logSimple(_siftImages);
+}
+
+void SiftAnalyser::drawAndAnalyseImage(QImage *image)
+{
+    Logger * log_i = new Logger("SIFT_BHT_Images.csv");
+    if (_newDirectory || _siftDictionary.isEmpty())
+        this->drawInitialDictionaryWords(SiftAnalyser::_numberOfWords);
+    this->drawImages(_imagesNum, _vectorNum);
+    this->findImageClasses(_siftImages, _siftDictionary);
+    this->getImageSiftBth(_siftImages, false);
+    log_i->logSimple(_siftImages);
+}
+
+
+void SiftAnalyser::fillImageSiftDescriptorsList()
+{
+    this->_siftDescriptors.clear();
+    this->_siftImages.clear();
+    QSqlRelationalTableModel *imageTable = new QSqlRelationalTableModel(this);
+    Logger *log = new Logger("SiftImageLog.txt");
+    int n;
+    imageTable->setTable(_imageTableName);
+    imageTable->select(); // reads image table from database
+    int imageCount = imageTable->rowCount();
+    for (int i = 0; i <imageCount; i++)
+    {
+        QSqlRecord record = imageTable->record(i); // reads one record from image table
+        QString fileQString = record.value("file").toString();
+        QByteArray byteArray = fileQString.toUtf8();
+        const char * file = byteArray.constData();
+        IplImage* img;
+
+        img = cvLoadImage(file, 1);
+        if (!img)
+            log->logSimple("Error while opening file: " + QString::fromAscii(file) + "\n");
+        else
+        {
+           struct feature* features ;
+           n = sift_features(img, &features);
+
+           for (int j = 0; j < n; j++ )
+           {
+               SiftDescriptor * sd = new SiftDescriptor(fileQString, (features+j)->descr);
+               _siftDescriptors << sd;
+           }
+           SiftImage * si = new SiftImage(fileQString, features, n, img->width, img->height);
+           _siftImages << si;
+        }
+    }
+}
+
+double SiftAnalyser::siftEuclideanDistance(const SiftDescriptor& firstSD , const SiftDescriptor & secondSD)
+{
+    double distance = 0.0;
+    for (int i = 0; i < SiftDescriptor::_numberOfDesc; i++)
+    {
+        double di = *(firstSD._descriptor + i) - *(secondSD._descriptor + i);
+        distance += di*di;
+    }
+    distance = sqrt(distance);
+    return distance;
+}
+
+double SiftAnalyser::siftMaximumDistance(const SiftDescriptor& firstSD , const SiftDescriptor & secondSD)
+{
+    double distance = 0.0;
+    for (int i = 0; i < SiftDescriptor::_numberOfDesc; i++)
+    {
+        double di = (double)abs(*(firstSD._descriptor + i) - *(secondSD._descriptor + i));
+        if (di > distance)
+            distance = di;
+    }
+
+    return distance;
+}
+
+
+
+void SiftAnalyser::kMeans(QLinkedList<SiftDescriptor *> &siftDescriptors, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    Logger * log_d = new Logger("SIFT_Dictionary_changes.csv");
+    Logger * log_i = new Logger("SIFT_Images_changes.csv");
+    Logger * log_l = new Logger("SIFT_loops.txt");
+    int i = 0;
+    bool meanChanged = true;
+    while (meanChanged == true)
+    {
+        log_l->log(QString::number(++i));
+        log_i->logSimple(siftDescriptors);
+        log_d->logSimple(dictionary);
+        determineClosestImageClass(siftDescriptors, dictionary);
+        meanChanged = findNewMeans(siftDescriptors, dictionary);
+    }
+}
+
+void SiftAnalyser::kMeans(QLinkedList<SiftImage*> &siftImages, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    Logger * log_d = new Logger("SIFT_Dictionary_changes.csv");
+    Logger * log_i = new Logger("SIFT_Images_changes.csv");
+    Logger * log_l = new Logger("SIFT_loops.txt");
+    int i = 0;
+    bool meanChanged = true;
+   // while (meanChanged == true)
+   // {
+        log_l->log(QString::number(++i));
+        log_i->logSimple(siftImages);
+        log_d->logSimple(dictionary);
+        determineClosestImageClass(siftImages, dictionary);
+
+       // meanChanged = findNewMeans(siftDescriptors, dictionary);
+   // }
+}
+
+void SiftAnalyser::findImageClasses(QLinkedList<SiftDescriptor *> &siftDescriptors, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    Logger * log_d = new Logger("SIFT_Dictionary_changes.csv");
+    Logger * log_i = new Logger("SIFT_Images_changes.csv");
+    determineClosestImageClass(siftDescriptors, dictionary);
+    log_i->logSimple(siftDescriptors);
+    log_d->logSimple(dictionary);
+}
+
+void SiftAnalyser::findImageClasses(QLinkedList<SiftImage*> &siftImages, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    Logger * log_i = new Logger("SIFT_Images_changes.csv");
+    Logger * log_d = new Logger("SIFT_Dictionary_changes.csv");
+    determineClosestImageClass(siftImages, dictionary);
+    log_i->logSimpleSIFT(siftImages);
+    log_d->logSimple(dictionary);
+
+}
+
+void SiftAnalyser::determineClosestImageClass(QLinkedList<SiftDescriptor *> &examples, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    QMutableLinkedListIterator<SiftDescriptor *> ei(examples);
+    while (ei.hasNext())
+    {
+        SiftDescriptor * example = ei.next();
+        double dist = SiftAnalyser::_maxDoubleValue;
+        QMutableLinkedListIterator<SiftDescriptor *> di(dictionary);
+        while (di.hasNext())
+        {
+            SiftDescriptor * dict = di.next();
+            //double newDist = this->siftMaximumDistance(*example, *dict);
+            double newDist = this->siftEuclideanDistance(*example, *dict);
+            if(newDist <= dist)
+            {
+                dist = newDist;
+                example->_class = dict->_class;
+            }
+        }
+        if (!_usedDictionaryWords.contains(example->_class))
+            _usedDictionaryWords << example->_class;
+    }
+
+}
+
+void SiftAnalyser::determineClosestImageClass(QLinkedList<SiftImage*> &siftImage, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    _usedDictionaryWords.clear();
+    QMutableLinkedListIterator<SiftImage *> ei(siftImage);
+    while (ei.hasNext())
+    {
+        SiftImage * img = ei.next();
+        this->determineClosestImageClass(img->_featuresList, dictionary);
+    }
+    createSiftSections(_siftSections, siftImage, _usedDictionaryWords, dictionary);
+    updateDictionary(dictionary, _siftSections);
+}
+
+void SiftAnalyser::getImageSiftBth(QLinkedList<SiftImage *> &siftImages, bool blocks)
+{
+    QMutableLinkedListIterator<SiftImage *> ei(siftImages);
+    while (ei.hasNext())
+    {
+        SiftImage * img = ei.next();
+        this->getImageSiftBth(*img, blocks);
+    }
+}
+
+int SiftAnalyser::getImageSiftBth(SiftImage &image, bool blocks)
+{
+    this->getImageHistogram(image, blocks);
+
+    // zaproponowac bth jako 6 liczb uint
+}
+
+int * SiftAnalyser::getImageHistogram(SiftImage &image, bool blocks)
+{
+    image._siftHistogram.clear();
+    image._siftBth.clear();
+    if (!blocks)
+    {
+        this->_blockNumH = 1;
+        this->_blockNumW = 1;
+    }
+    int blockH = image._height / this->_blockNumH; // jeœli blocks jest false, dziele przez 1
+    int blockW = image._width / this->_blockNumW;
+    for (int y = 0; y < this->_blockNumH; y++)
+        for (int x = 0; x < this->_blockNumW; x++)
+        {
+            int siftDescNum = 0;
+            int * imageClassHistogram = new int[SiftAnalyser::_numberOfWords];
+            int * imageClassHistogramBTH = new int[SiftAnalyser::_numberOfWords];
+            for (int i = 0; i < SiftAnalyser::_numberOfWords; i++)
+            {
+                *(imageClassHistogram + i) = 0;
+                *(imageClassHistogramBTH + i) = 0;
+            }
+            QMutableLinkedListIterator<SiftDescriptor *> fi(image._featuresList);
+            while (fi.hasNext())
+            {
+                SiftDescriptor * sd = fi.next();
+                if(sd->_x >= x*blockW && sd->_x < (x+1)*blockW
+                        &&
+                   sd->_y >= y*blockH && sd->_y < (y+1)*blockH)
+                {
+                    *(imageClassHistogram + sd->_class) += 1;
+                    siftDescNum++;
+                }
+            }
+            image._siftHistogram << imageClassHistogram;
+            //uint bthHist = 0;
+            if (siftDescNum != 0)
+                for (int i = 0; i < SiftAnalyser::_numberOfWords; i++)
+                    if ((double)((double)(*(imageClassHistogram + i) * 100)/ siftDescNum) >= this->_thresholdValue)
+                    {
+                        *(imageClassHistogramBTH + i) = 1;
+                        //bthHist = (bthHist << 1) + 1;
+                    }
+                    else
+                    {
+                        *(imageClassHistogramBTH + i) = 0;
+                        //bthHist = bthHist << 1;
+                    }
+            image._siftBth << imageClassHistogramBTH;
+        }
+
+
+    int * imageClassHistogram = new int[SiftAnalyser::_numberOfWords];
+    return imageClassHistogram;
+}
+
+bool SiftAnalyser::findNewMeans(QLinkedList<SiftDescriptor *> &examples, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    bool meanChanged = false;
+    QMutableLinkedListIterator<SiftDescriptor *> di(dictionary);
+    while (di.hasNext())
+    {
+        SiftDescriptor * dict = di.next();
+        SiftDescriptor * newMean = findClassMean(examples, dict->_class);
+        if (newMean != 0)
+        {
+            double dist = this->siftEuclideanDistance(*dict, *newMean);
+            if (dist != 0)
+            {
+                meanChanged = true;
+                dict->_descriptor = newMean->_descriptor;
+            }
+        }
+    }
+    return meanChanged;
+}
+
+SiftDescriptor * SiftAnalyser::findClassMean(QLinkedList<SiftDescriptor *> &examples, int cls)
+{
+
+    int clsReps = 0;
+    QMutableLinkedListIterator<SiftDescriptor *> ei(examples);
+    double * descriptor = new double[SiftDescriptor::_numberOfDesc];
+    for (int i = 0; i < SiftDescriptor::_numberOfDesc; i++)
+        *(descriptor + i) = 0;
+    while (ei.hasNext())
+    {
+        SiftDescriptor * example = ei.next();
+        if(example->_class == cls)
+        {
+            clsReps++;
+            for (int i = 0; i < SiftDescriptor::_numberOfDesc; i++)
+                *(descriptor + i) += *(example->_descriptor + i);
+        }
+
+    }
+    if (clsReps != 0)
+    {
+        for (int i = 0; i < SiftDescriptor::_numberOfDesc; i++)
+            *(descriptor + i) = static_cast<double>(static_cast<int>(*(descriptor + i)/clsReps)); // zaokraglamy do calosci bo sift powinno byc intami
+        SiftDescriptor * newMeanDesc = new SiftDescriptor("newMean", descriptor, cls);
+        return newMeanDesc;
+    }
+    return 0;
+}
+
+void SiftAnalyser::updateDictionary(QLinkedList<SiftDescriptor *> &dictionary, QMap<int, SiftDictionarySections *> &sections)
+{
+    dictionary.clear();
+    QMapIterator<int, SiftDictionarySections *> si(sections);
+    double powerSum = 0;
+    while (si.hasNext())
+    {
+        SiftDictionarySections * section = si.next().value();
+        powerSum += section->_power;
+    }
+    si.toFront();
+    while (si.hasNext())
+    {
+        SiftDictionarySections * section = si.next().value();
+        for (int i = 0; i < qRound((double)SiftAnalyser::_numberOfWords * (section->_power / powerSum)); i++)
+        //for (int i = 0; i < qRound((double)SiftAnalyser::_numberOfWords / (sections.count())); i++)
+        {
+            double * descriptorValues = new double[SiftDescriptor::_numberOfDesc];
+            for (int j = 0; j < SiftDescriptor::_numberOfDesc; j ++)
+            {
+                double randValue = (double)((int)(*(section->_descMin->_descriptor + j) + qrand()) % (int)(*(section->_descMax->_descriptor + j) + 1));
+                *(descriptorValues + j) = randValue;
+            }
+            SiftDescriptor * newClass = new SiftDescriptor("Representative of the class " + QString::number(dictionary.count()), descriptorValues, dictionary.count());
+            dictionary << newClass;
+        }
+    }
+
+}
+
+void SiftAnalyser::createSiftSections(QMap<int, SiftDictionarySections *> &sections, QLinkedList<SiftImage*> &images, QLinkedList<int> &usedWords, QLinkedList<SiftDescriptor *> &dictionary)
+{
+    sections.clear();
+    QMutableLinkedListIterator<int> usedWord(usedWords);
+    while (usedWord.hasNext())
+    {
+        SiftDictionarySections * sds = new SiftDictionarySections(usedWord.next());
+        sections.insert(sds->_class, sds);
+    }
+
+    QMutableLinkedListIterator<SiftImage*> image(images);
+    while(image.hasNext())
+    {
+        SiftImage * i = image.next();
+        QMutableLinkedListIterator<SiftDescriptor*> imageFeat(i->_featuresList);
+        while (imageFeat.hasNext())
+        {
+            SiftDescriptor * feat = imageFeat.next();
+            sections[feat->_class]->changeSection(*feat);
+        }
+
+    }
+
+}
+
+void SiftAnalyser::drawInitialDictionaryWords(int wordsNumber)
+{
+    this->_siftDictionary.clear();
+    uint seed = (uint)QDateTime::currentDateTime().toTime_t();
+    qsrand(seed);
+    for (int i = 0; i < wordsNumber; i++)
+    {
+        double * descriptorValues = new double[SiftDescriptor::_numberOfDesc];
+
+        for (int j = 0; j < SiftDescriptor::_numberOfDesc; j ++)
+        {
+            double randValue = (double)(qrand() % (SiftAnalyser::_maxSiftDescValue + 1));
+            *(descriptorValues + j) = randValue;
+        }
+        SiftDescriptor * newClass = new SiftDescriptor("Representative of the class " + QString::number(i), descriptorValues, i);
+        this->_siftDictionary << newClass;
+    }
+}
+
+void SiftAnalyser::drawImages(int imgNumber, int vectNumber)
+{
+    this->_siftImages.clear();
+    for (int k = 0; k < imgNumber; k++)
+    {
+        QLinkedList<SiftDescriptor *> SiftList;
+        for (int i = 0; i < vectNumber; i++)
+        {
+            double * descriptorValues = new double[SiftDescriptor::_numberOfDesc];
+
+            for (int j = 0; j < SiftDescriptor::_numberOfDesc; j ++)
+            {
+                double randValue = (double)(( _minValue + qrand()) % (_maxValue + 1));
+                *(descriptorValues + j) = randValue;
+            }
+            SiftDescriptor * newClass = new SiftDescriptor("Random SIFT " + QString::number(i + 1), descriptorValues, i+1);
+            SiftList << newClass;
+        }
+        SiftImage * newImage = new SiftImage("Random Image", SiftList, 1, 1);
+        this->_siftImages << newImage;
+    }
+}
+
+
+void SiftAnalyser::setNewDirectory(bool newDirectory)
+{
+    this->_newDirectory = newDirectory;
+}
+
+void SiftAnalyser::setThresholdValue(int thresholdValue)
+{
+    this->_thresholdValue = thresholdValue;
+}
+
+void SiftAnalyser::setBlockNumH(int blockNumH)
+{
+    this->_blockNumH = blockNumH;
+}
+
+void SiftAnalyser::setBlockNumW(int blockNumW)
+{
+    this->_blockNumW = blockNumW;
+}
+
+void SiftAnalyser::setImagesNum(int imagesNum)
+{
+    this->_imagesNum = imagesNum;
+}
+
+void SiftAnalyser::setMinValue(int value)
+{
+    this->_minValue = value;
+}
+
+void SiftAnalyser::setMaxValue(int value)
+{
+    this->_maxValue = value;
+}
+
+void SiftAnalyser::setVectNum(int value)
+{
+    this->_vectorNum = value;
+}
+
+/* FILTRY I INNE Nieu¿ywane*/
+
+void SiftAnalyser::convolveFilter(QImage *image, int *w, int wX, int wY)
+{
+
+    QColor *color = new QColor();
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    /*Logger *log = new Logger("convolveLog.txt");
+    log->clearLogFile();*/
+    int s = 0;
+    for (int i = 0; i < wX; i++)
+        for (int j = 0; j < wY; j++)
+            s += *(w + (i*wX + j));
+    if (s == 0)
+        s = 1;
+    QImage *tmpImg = new QImage(*image);
+
+    for (int y = wY/2; y < image->height() - wY/2; y++)
+    {
+        for (int x = wX/2; x < image->width() - wX/2; x++)
+        {
+
+            ////log->logPrimitive("(" + QString::number(x) + ", " + QString::number(y) + ")\n");
+            r = g = b = 0;
+            ////log->logPrimitive("(" + QString::number(r) + ", " + QString::number(g) + ", " + QString::number(b) + ")\n");
+            for (int yy = 0; yy < wY; yy++)
+                for (int xx = 0; xx < wX; xx++)
+                {
+
+                    r += ((QColor)image->pixel(x-wX/2+xx,y-wY/2+yy)).red() * *(w + xx*wX + yy);
+                    g += ((QColor)image->pixel(x-wX/2+xx,y-wY/2+yy)).green() * *(w + xx*wX + yy);
+                    b += ((QColor)image->pixel(x-wX/2+xx,y-wY/2+yy)).blue() * *(w + xx*wX + yy);
+              //      //log->logPrimitive("\t W(" + QString::number(x-wX/2+xx) + ", " + QString::number(y-wY/2+yy) + ") = " + QString::number(*(w + xx*wX + yy)) + " ("
+              //                        + QString::number(r) + ", " + QString::number(g) + ", " + QString::number(b) + ")\n");
+                }
+
+            r /= s;
+            g /= s;
+            b /= s;
+            if (r > 255)
+               r = 255;
+            if (r < 0)
+                r = 0;
+            if (g > 255)
+               g = 255;
+            if (g < 0)
+                g = 0;
+            if (b > 255)
+               b = 255;
+            if (b < 0)
+                b = 0;
+            color->setRgb(r,g,b);
+            tmpImg->setPixel(x, y, color->rgb());
+            ////log->logPrimitive("\t\t (" + QString::number(r) + ", " + QString::number(g) + ", " + QString::number(b) + ")\n");
+        }
+    }
+    *image = *tmpImg;
+}
+
+void SiftAnalyser::bw(QImage *image)
+{
+    QColor *color = new QColor();
+    int colorValue = 0;
+    for (int x = 0; x < image->width(); x++)
+        for (int y = 0; y < image->height(); y++)
+        {
+            colorValue = (((QColor)image->pixel(x,y)).red() + ((QColor)image->pixel(x,y)).green() + ((QColor)image->pixel(x,y)).blue())/3;
+            color->setRgb(colorValue, colorValue, colorValue);
+            image->setPixel(x,y, color->rgb());
+        }
+}
+
+void SiftAnalyser::imageSum(QImage *orgImg, QImage *subImg)
+{
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    QColor * pixelColor = new QColor();
+    for(int x = 0; x < orgImg->width(); x++)
+        for(int y = 0; y < orgImg->height(); y++)
+        {
+            r = ((QColor)orgImg->pixel(x,y)).red() + ((QColor)subImg->pixel(x,y)).red();
+            g = ((QColor)orgImg->pixel(x,y)).green() + ((QColor)subImg->pixel(x,y)).green();
+            b = ((QColor)orgImg->pixel(x,y)).blue() + ((QColor)subImg->pixel(x,y)).blue();
+            if (r > 255)
+               r = 255;
+            if (r < 0)
+                r = 0;
+            if (g > 255)
+               g = 255;
+            if (g < 0)
+                g = 0;
+            if (b > 255)
+               b = 255;
+            if (b < 0)
+                b = 0;
+            pixelColor->setRgb(r,g,b);
+            orgImg->setPixel(x,y, pixelColor->rgb());
+        }
+}
+
+void SiftAnalyser::imageDiff(QImage *orgImg, QImage *subImg)
+{
+    int r = 0;
+    int g = 0;
+    int b = 0;
+    QColor * pixelColor = new QColor();
+    for(int x = 0; x < orgImg->width(); x++)
+        for(int y = 0; y < orgImg->height(); y++)
+        {
+            r = ((QColor)orgImg->pixel(x,y)).red() - ((QColor)subImg->pixel(x,y)).red();
+            g = ((QColor)orgImg->pixel(x,y)).green() - ((QColor)subImg->pixel(x,y)).green();
+            b = ((QColor)orgImg->pixel(x,y)).blue() - ((QColor)subImg->pixel(x,y)).blue();
+            if (r > 255)
+               r = 255;
+            if (r < 0)
+                r = 0;
+            if (g > 255)
+               g = 255;
+            if (g < 0)
+                g = 0;
+            if (b > 255)
+               b = 255;
+            if (b < 0)
+                b = 0;
+            pixelColor->setRgb(r,g,b);
+            orgImg->setPixel(x,y, pixelColor->rgb());
+        }
+}
+
+
+void SiftAnalyser::threesholdFilter(QImage * image, int thrshd)
+{
+    QColor *color = new QColor();
+    int colorValue = 0;
+    for (int x = 0; x < image->width(); x++)
+        for (int y = 0; y < image->height(); y++)
+        {
+            colorValue = (((QColor)image->pixel(x,y)).red() + ((QColor)image->pixel(x,y)).green() + ((QColor)image->pixel(x,y)).blue())/3;
+            if (colorValue >= thrshd)
+                colorValue = 255;
+            else
+                 colorValue = 0;
+            color->setRgb(colorValue, colorValue, colorValue);
+            image->setPixel(x,y, color->rgb());
+        }
+}
+
+/* UWAGA!!! W celu zwiekszenia wydajnoœci zak³adam, ¿e obraz zosta³
+ skonwertowany do czerni i bieli, a wiec wszystkie sk³adowe koloru
+ maja ta sama wartoœæ */
+void SiftAnalyser::gradient(QImage * image, int interestArea)
+{
+    float pixGrad, lNeighGrad, rNeighGrad;
+    QImage *tmpImg = new QImage(*image);
+    Logger *log = new Logger("gradient.txt");
+    log->clearLogFile();
+    for (int y = (interestArea/2)+1; y < image->height() - ((interestArea/2)+1); y++)
+    {
+        for (int x = (interestArea/2)+1; x < image->width() - ((interestArea/2)+1); x++)
+        {
+//            //katy 0 i 180 stopni
+            //log->logPrimitive("NASTEPNY PIKSEL:\n");
+            //log->logPrimitive("Katy 0 i 180 stopni:\n");
+            pixGrad = -2*(((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x-1,y)).red()) +  (((QColor)tmpImg->pixel(x+1,y)).red());
+            //log->logPrimitive("Piksel (" + QString::number(x) + ", " + QString::number(y) + "), gradient = " + QString::number(pixGrad)+ "\n");
+            lNeighGrad = -2*(((QColor)tmpImg->pixel(x-1,y)).red()) +  (((QColor)tmpImg->pixel(x-2,y)).red()) +  (((QColor)tmpImg->pixel(x,y)).red());
+            //log->logPrimitive("Lewy sasiad (" + QString::number(x-1) + ", " + QString::number(y) + "), gradient = " + QString::number(lNeighGrad)+ "\n");
+            rNeighGrad = -2*(((QColor)tmpImg->pixel(x+1,y)).red()) +  (((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x+2,y)).red());
+            //log->logPrimitive("Prawy sasiad (" + QString::number(x+1) + ", " + QString::number(y) + "), gradient = " + QString::number(rNeighGrad)+ "\n");
+
+            if (pixGrad < lNeighGrad || pixGrad < rNeighGrad)
+            {
+
+                image->setPixel(x, y, (new QColor(0,0,0))->rgb());
+                continue;
+            }
+            // katy w otoczeniu 90 stopni
+            //log->logPrimitive("Katy 90 stopni:\n");
+            pixGrad = -2*(((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x,y-1)).red()) +  (((QColor)tmpImg->pixel(x,y+1)).red());
+            //log->logPrimitive("Piksel (" + QString::number(x) + ", " + QString::number(y) + "), gradient = " + QString::number(pixGrad)+ "\n");
+            lNeighGrad = -2*(((QColor)tmpImg->pixel(x,y-1)).red()) +  (((QColor)tmpImg->pixel(x,y-2)).red()) +  (((QColor)tmpImg->pixel(x,y)).red());
+            //log->logPrimitive("Lewy sasiad (" + QString::number(x) + ", " + QString::number(y-1) + "), gradient = " + QString::number(lNeighGrad)+ "\n");
+            rNeighGrad = -2*(((QColor)tmpImg->pixel(x,y+1)).red()) +  (((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x,y+2)).red());
+            //log->logPrimitive("Prawy sasiad (" + QString::number(x) + ", " + QString::number(y+1) + "), gradient = " + QString::number(rNeighGrad)+ "\n");
+            if (pixGrad < lNeighGrad || pixGrad < rNeighGrad)
+            {
+                image->setPixel(x, y, (new QColor(0,0,0))->rgb());
+                continue;
+            }
+            /*
+            // katy w otoczeniu 135 stopni
+            //log->logPrimitive("Katy 135 stopni:\n");
+            pixGrad = -2*(((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x-1,y-1)).red()) +  (((QColor)tmpImg->pixel(x+1,y+1)).red());
+            //log->logPrimitive("Piksel (" + QString::number(x) + ", " + QString::number(y) + "), gradient = " + QString::number(pixGrad)+ "\n");
+            lNeighGrad = -2*(((QColor)tmpImg->pixel(x-1,y-1)).red()) + (((QColor)tmpImg->pixel(x-2,y-2)).red()) +  (((QColor)tmpImg->pixel(x,y)).red());
+            //log->logPrimitive("Lewy sasiad (" + QString::number(x-1) + ", " + QString::number(y-1) + "), gradient = " + QString::number(lNeighGrad)+ "\n");
+            rNeighGrad = -2*(((QColor)tmpImg->pixel(x+1,y+1)).red()) +  (((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x+2,y+2)).red());
+            //log->logPrimitive("Prawy sasiad (" + QString::number(x+1) + ", " + QString::number(y+1) + "), gradient = " + QString::number(rNeighGrad)+ "\n");
+            if (pixGrad < lNeighGrad || pixGrad < rNeighGrad)
+            {
+                image->setPixel(x, y, (new QColor(0,0,0))->rgb());
+                continue;
+            }
+
+            // katy 45 stopni
+            //log->logPrimitive("Katy 45 stopni:\n");
+            pixGrad = -2*(((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x-1,y+1)).red()) +  (((QColor)tmpImg->pixel(x+1,y-1)).red());
+            //log->logPrimitive("Piksel (" + QString::number(x) + ", " + QString::number(y) + "), gradient = " + QString::number(pixGrad)+ "\n");
+            lNeighGrad = -2*(((QColor)tmpImg->pixel(x-1,y+1)).red()) +  (((QColor)tmpImg->pixel(x-2,y+2)).red()) +   (((QColor)tmpImg->pixel(x,y)).red());
+            //log->logPrimitive("Lewy sasiad (" + QString::number(x-1) + ", " + QString::number(y+1) + "), gradient = " + QString::number(lNeighGrad)+ "\n");
+            rNeighGrad = -2*(((QColor)tmpImg->pixel(x+1,y-1)).red()) +  (((QColor)tmpImg->pixel(x,y)).red()) +  (((QColor)tmpImg->pixel(x+2,y-2)).red());
+            //log->logPrimitive("Prawy sasiad (" + QString::number(x+1) + ", " + QString::number(y-1) + "), gradient = " + QString::number(rNeighGrad)+ "\n");
+            if (pixGrad < lNeighGrad || pixGrad < rNeighGrad)
+            {
+                image->setPixel(x, y, (new QColor(0,0,0))->rgb());
+                continue;
+            }
+//            log->logPrimitive("!!!MALUJEMY NA BIA£O!!! \n");
+
+*/
+        }
+    }
+
+}
+
+void SiftAnalyser::mygradient(QImage * image, int interestArea)
+{
+    int pixGrad, lNeighGrad, rNeighGrad, uNeighGrad, dNeighGrad, ulNeighGrad, dlNeighGrad, urNeighGrad, drNeighGrad;
+    QImage *tmpImg = new QImage(*image);
+    for (int y = (interestArea/2)+1; y < image->height() - ((interestArea/2)+1); y++)
+    {
+        for (int x = (interestArea/2)+1; x < image->width() - ((interestArea/2)+1); x++)
+        {
+//            //katy 0 i 180 stopni
+            pixGrad = ((QColor)tmpImg->pixel(x,y)).red();
+            lNeighGrad = ((QColor)tmpImg->pixel(x - 1,y)).red();
+            rNeighGrad = ((QColor)tmpImg->pixel(x + 1,y)).red();
+            uNeighGrad = ((QColor)tmpImg->pixel(x, y - 1)).red();
+            dNeighGrad = ((QColor)tmpImg->pixel(x, y + 1)).red();
+            ulNeighGrad = ((QColor)tmpImg->pixel(x - 1, y - 1)).red();
+            dlNeighGrad = ((QColor)tmpImg->pixel(x - 1, y + 1)).red();
+            urNeighGrad = ((QColor)tmpImg->pixel(x + 1, y - 1)).red();
+            drNeighGrad = ((QColor)tmpImg->pixel(x + 1, y + 1)).red();
+            if (pixGrad != 0 && lNeighGrad == 0 &&
+                    rNeighGrad== 0 && uNeighGrad== 0 && dNeighGrad== 0 && ulNeighGrad== 0 && dlNeighGrad== 0 && urNeighGrad== 0 && drNeighGrad == 0)
+            {
+                 image->setPixel(x, y, (new QColor(0,0,0))->rgb());
+            }
+
+        }
+    }
+
+
+}

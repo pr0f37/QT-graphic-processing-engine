@@ -1,0 +1,31 @@
+#include "lssimage.h"
+
+LssImage::LssImage()
+{
+
+}
+
+LssImage::LssImage(int cls, QString * name, int *bthHistogram, QLinkedList<LssDescriptor*> * descriptors)
+{
+    this->_class = cls;
+    this->_name = name;
+    this->_bthHistogram = bthHistogram;
+    this->_descriptors = descriptors;
+}
+
+LssImage::LssImage(QString * name, vector<float> * descriptors)
+{
+    this->_name = name;
+    this->_descriptors = new QLinkedList<LssDescriptor*>();
+
+
+}
+
+LssImage::LssImage(LssImage * image)
+{
+    this->_class = image->_class;
+    this->_name = image->_name;
+    this->_bthHistogram = image->_bthHistogram;
+    this->_descriptors = image->_descriptors;
+}
+

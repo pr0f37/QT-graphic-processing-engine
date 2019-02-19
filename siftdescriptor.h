@@ -1,0 +1,32 @@
+#ifndef SIFTDESCRIPTOR_H
+#define SIFTDESCRIPTOR_H
+#include <QString>
+#include <sstream>
+#include <stdexcept>
+#include <string>
+#include <highgui.h>
+#include <stdio.h>
+
+class SiftDescriptor
+{
+public:
+    SiftDescriptor();
+    SiftDescriptor(const QString &, double *, int = 0, double = 0, double = 0, double = 0, double = 0, double = 0, double = 0, double = 0);
+//    SiftDescriptor(const QString &, double *, int);
+    SiftDescriptor(const QString &, int *, int = 0, double = 0, double = 0, double = 0, double = 0, double = 0, double = 0, double = 0);
+    QString toString();
+    int * _descriptor;
+    QString _name;
+    int _class;
+    static const int _numberOfDesc = 128;
+    double _x;                      /**< x coord */
+    double _y;                      /**< y coord */
+    double _a;                      /**< Oxford-type affine region parameter */
+    double _b;                      /**< Oxford-type affine region parameter */
+    double _c;                      /**< Oxford-type affine region parameter */
+    double _scl;                    /**< scale of a Lowe-style feature */
+    double _ori;                    /**< orientation of a Lowe-style feature */
+
+};
+
+#endif // SIFTDESCRIPTOR_H

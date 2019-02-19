@@ -1,0 +1,37 @@
+#ifndef BTHANALYSER_H
+#define BTHANALYSER_H
+#define IMAGES_AMOUNT 100
+#include "analyser.h"
+class BthAreaAnalyser;
+
+class BthAnalyser:
+         public Analyser
+{
+    Q_OBJECT
+public:
+    friend class BthAreaAnalyser;
+    BthAnalyser(const QString&, const QString&);
+    void updateConfigFile(const QString&, QSqlRelationalTableModel&);
+    void analyseImage(const QImage&);
+    uint binarize(qint64&, const int&, const int&);
+    void updateDatabase(const QString&);
+    uint distance(const QSqlRecord&);
+    uint partialDistance(const QString&, const QString&);
+    void classifyColor(qint64*, const int&, const int&, const int&);
+public slots:
+    void BTHInitialize();
+    void BTHLoad();
+    void receiveFileName(const QString);
+    void receiveThreesholdValue(const int);
+signals:
+    void sendBthIdValue(const QString);
+private:
+    void sort(uint **);
+    uint _subblocks[40];
+    int _threshold;
+    int _widthBlocks;
+    int _heightBlocks;
+    uint _distThreshold;
+};
+
+#endif // BTHANALYSER_H
